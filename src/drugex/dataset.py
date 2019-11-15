@@ -33,7 +33,7 @@ def corpus(input: str, out: str, *, vocab_path: str):
         out : the path for vocabulary (containing all of tokens for SMILES construction)
             and output table (including CANONICAL_SMILES and whitespace delimited token sentence)
     """
-    df = pd.read_table(input).CANONICAL_SMILES
+    df = pd.read_table(input).CANONICAL_SMILES.dropna()
     voc = Voc(vocab_path)
     canons = []
     tokens = []
@@ -118,7 +118,7 @@ def A2AR(input_path: str, output_path: str):
             and replacing the nitrogen electrical group to nitrogen atom "N".
     """
     df = pd.read_table(input_path)
-    df = df[['CMPD_CHEMBLID', 'CANONICAL_SMILES', 'PCHEMBL_VALUE']]
+    df = df[['CMPD_CHEMBLID', 'CANONICAL_SMILES', 'PCHEMBL_VALUE', 'ACTIVITY_COMMENT']]
     df = df.dropna()
     for i, row in df.iterrows():
         # replacing the nitrogen electrical group to nitrogen atom "N"

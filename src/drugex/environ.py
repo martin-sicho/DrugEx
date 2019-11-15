@@ -227,7 +227,7 @@ PAIR = ['CMPD_CHEMBLID', 'CANONICAL_SMILES', 'PCHEMBL_VALUE', 'ACTIVITY_COMMENT'
 def _main_helper(*, path, feat, alg, is_regression, batch_size, n_epoch, lr, output):
     df = pd.read_table(path)
     df = df[PAIR].set_index(PAIR[0])
-    df[PAIR[2]] = df.groupby(PAIR[0]).mean()
+    df[PAIR[2]] = df.groupby(df.index).mean()
     # The molecules that have PChEMBL value
     numery = df[PAIR[1:-1]].drop_duplicates().dropna()
     if is_regression:
@@ -252,9 +252,10 @@ def _main_helper(*, path, feat, alg, is_regression, batch_size, n_epoch, lr, out
     out = os.path.join(output, '%s_%s_%s' % (alg, 'reg' if is_regression else 'cls', feat))
 
     # Model training and saving
-    # model = RandomForestClassifier(n_estimators=1000, n_jobs=10)
-    # model.fit(X, y[:, 0])
-    # joblib.dump(model, out+'.pkg')
+    if alg == "RF":
+        model = RandomForestClassifier(n_estimators=1000, n_jobs=10)
+        model.fit(X, y[:, 0])
+        joblib.dump(model, out+'.pkg')
 
     # Cross validation and independent test
     data = pd.DataFrame()

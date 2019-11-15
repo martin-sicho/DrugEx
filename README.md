@@ -39,6 +39,25 @@ $ cd drugex
 $ pip install -e .
 ```
 
+
+    2. Scikit-Learn (version >= 0.18)
+
+        tcsh% pip install scikit-learn
+
+    3. Pandas (version >= 0.22)
+
+        tcsh% pip install pandas
+
+    4. PyTorch (version == 1.0)
+
+        tcsh% conda install pytorch torchvision cudatoolkit=x.x -c pytorch 
+        
+        Note: it depends on the GPU device and CUDA tookit (x.x is the version of CUDA)
+
+    5. Matplotlib (version >= 2.0)
+
+        tcsh% pip install matplotlib
+        
 On mac, you may [need](https://github.com/pytorch/pytorch/issues/20030) to also
 install `libomp` with:
 

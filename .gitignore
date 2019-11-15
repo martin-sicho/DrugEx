@@ -1,3 +1,11 @@
+# manual entries
+/.idea/
+__pycache__/
+/data/*_corpus.txt
+/data/*_voc.txt
+/output/
+/zinc/
+
 # Created by .ignore support plugin (hsz.mobi)
 ### VirtualEnv template
 # Virtualenv
