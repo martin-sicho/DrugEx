@@ -17,7 +17,7 @@ from torch.utils.data import DataLoader
 from drugex import model, util
 
 
-def _main_helper(*, input_directory, batch_size, output_directory, use_tqdm=False):
+def _main_helper(*, input_directory, batch_size, epochs_pr, epochs_ex, output_directory, use_tqdm=False):
     # Construction of the vocabulary
     voc = util.Voc(os.path.join(input_directory, "voc.txt"))
 
@@ -35,7 +35,7 @@ def _main_helper(*, input_directory, batch_size, output_directory, use_tqdm=Fals
         print('Exploitation network begins to be trained...')
         zinc = util.MolData(os.path.join(input_directory, "zinc_corpus.txt"), voc, token='SENT')
         zinc = DataLoader(zinc, batch_size=batch_size, shuffle=True, drop_last=True, collate_fn=zinc.collate_fn)
-        prior.fit(zinc, out_path=net_pr_pickle_path, log_path=net_pr_log_path, use_tqdm=use_tqdm)
+        prior.fit(zinc, out_path=net_pr_pickle_path, log_path=net_pr_log_path, epochs=epochs_pr)
         print('Exploitation network training is finished!')
     # TODO is this necessary if it just got trained?
     prior.load_state_dict(T.load(net_pr_pickle_path))
@@ -56,24 +56,28 @@ def _main_helper(*, input_directory, batch_size, output_directory, use_tqdm=Fals
     valid = DataLoader(valid, batch_size=batch_size, collate_fn=valid.collate_fn)
 
     print('Exploration network begins to be trained...')
-    explore.fit(train, loader_valid=valid, out_path=net_ex_pickle_path, epochs=1000, log_path=net_ex_log_path)
+    explore.fit(train, loader_valid=valid, out_path=net_ex_pickle_path, epochs=epochs_ex, log_path=net_ex_log_path)
     print('Exploration network training is finished!')
 
 
 @click.command()
-@click.option('-d', '--input-directory', type=click.Path(dir_okay=True, file_okay=False), required=True)
-@click.option('-o', '--output-directory', type=click.Path(dir_okay=True, file_okay=False), required=True)
+@click.option('-d', '--input-directory', type=click.Path(dir_okay=True, file_okay=False), default='data')
+@click.option('-o', '--output-directory', type=click.Path(dir_okay=True, file_okay=False), default='output')
 @click.option('-b', '--batch-size', type=int, default=512, show_default=True)
-@click.option('-g', '--cuda')
+@click.option('-p', '--epochs-pr', type=int, default=512, show_default=True)
+@click.option('-e', '--epochs-ex', type=int, default=512, show_default=True)
+@click.option('-g', '--cuda', default="0")
 @click.option('--use-tqdm', is_flag=True)
-def main(input_directory, output_directory, batch_size, cuda, use_tqdm):
+def main(input_directory, output_directory, batch_size, epochs_pr, epochs_ex, cuda, use_tqdm):
     if cuda:
         os.environ["CUDA_VISIBLE_DEVICES"] = cuda
     _main_helper(
         input_directory=input_directory,
         output_directory=output_directory,
         batch_size=batch_size,
-        use_tqdm=use_tqdm,
+        epochs_pr=epochs_pr,
+        epochs_ex=epochs_ex,
+        use_tqdm=True if use_tqdm else False,
     )
 
 
