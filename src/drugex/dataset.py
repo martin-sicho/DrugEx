@@ -118,8 +118,8 @@ def A2AR(input_path: str, output_path: str):
             and replacing the nitrogen electrical group to nitrogen atom "N".
     """
     df = pd.read_table(input_path)
-    df = df[['CMPD_CHEMBLID', 'CANONICAL_SMILES', 'PCHEMBL_VALUE', 'ACTIVITY_COMMENT']]
-    df = df.dropna()
+    df = df[['CMPD_CHEMBLID', 'CANONICAL_SMILES', 'PCHEMBL_VALUE', 'ACTIVITY_COMMENT']] # activity comment had to be added here because environ.py uses it
+    df = df.dropna() # FIXME: this eliminates a lot of molecules without an activity comment!!!
     for i, row in df.iterrows():
         # replacing the nitrogen electrical group to nitrogen atom "N"
         smile = row['CANONICAL_SMILES'].replace('[NH+]', 'N').replace('[NH2+]', 'N').replace('[NH3+]', 'N')
@@ -140,27 +140,39 @@ def A2AR(input_path: str, output_path: str):
 
 
 @click.command()
-@click.command('-z', '--zinc-directory', default='zinc/', type=click.Path(dir_okay=True, file_okay=False))
-@click.command('-d', '--directory', type=click.Path(dir_okay=True, file_okay=False), required=True)
-def main(zinc_directory, directory):
-    zinc_output_path = os.path.join(directory, 'ZINC.txt')
+@click.option('-d', '--data-directory', type=click.Path(dir_okay=True, file_okay=False), required=True)
+@click.option('-e', '--environment-data-file', type=click.Path(dir_okay=False, file_okay=True), required=True)
+@click.option('-v', '--vocabulary-file', default='voc.txt', type=click.Path(dir_okay=False, file_okay=True))
+def main(data_directory, environment_data_file, vocabulary_file):
+    zinc_output_path = os.path.join(data_directory, 'ZINC.txt')
+    zinc_directory = os.path.join(data_directory, 'zinc')
     if os.path.exists(zinc_directory):
+        click.echo("Compiling {0}".format(zinc_output_path))
         ZINC(folder=zinc_directory, out=zinc_output_path)
+        click.echo("Done.")
     else:
-        click.echo('Missing ZINC folder: {}'.format(zinc_directory))
+        click.echo('Missing ZINC folder: {0} \nThe default ZINC output file will be used: {1}'.format(zinc_directory, zinc_output_path), err=True)
 
-    if os.path.exists(zinc_output_path):
-        corpus(zinc_output_path, os.path.join(directory, 'zinc'), vocab_path='data/voc.txt')
+    click.echo("Generating ZINC corpus from: {0}".format(zinc_output_path))
+    zinc_processed = os.path.exists(os.path.join(data_directory, 'zinc_corpus.txt')) \
+                 and os.path.exists(os.path.join(data_directory, 'zinc_voc.txt'))
+    if os.path.exists(zinc_output_path) and not zinc_processed:
+        corpus(zinc_output_path, os.path.join(data_directory, 'zinc'), vocab_path=os.path.join(data_directory, vocabulary_file))
+        click.echo("Done.")
+    elif zinc_processed:
+        click.echo('ZINC data was already processed (corpus and vocabulary files generated). Skipping...', err=True)
+        pass
     else:
-        click.echo('Missing ZINC output file: {}'.format(zinc_output_path))
+        raise FileNotFoundError('Missing ZINC output file: {}'.format(zinc_output_path))
 
-    a2ar_path = os.path.join(directory, 'A2AR_raw.txt')
-    a2ar_output_path = os.path.join(directory, 'CHEMBL251.txt')
-    if os.path.exists(a2ar_path):
-        A2AR(a2ar_path, a2ar_output_path)
+    click.echo("Parsing raw CHEMBL data at {0}".format(environment_data_file))
+    environment_data_file = os.path.join(data_directory, environment_data_file)
+    output_path = os.path.join(data_directory, 'FT_data.txt')
+    if os.path.exists(environment_data_file):
+        A2AR(environment_data_file, output_path)
+        click.echo("Done.")
     else:
-        click.echo('Missing A2AR path: {}'.format(a2ar_path))
-
+        raise FileNotFoundError('Missing environment data path: {0}'.format(environment_data_file))
 
 if __name__ == '__main__':
     main()
