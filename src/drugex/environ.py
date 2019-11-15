@@ -18,6 +18,7 @@ from sklearn.model_selection import GridSearchCV, KFold, StratifiedKFold
 from sklearn.naive_bayes import GaussianNB
 from sklearn.neighbors import KNeighborsClassifier, KNeighborsRegressor
 from sklearn.svm import SVC, SVR
+from sklearn.externals import joblib
 from torch.utils.data import DataLoader, TensorDataset
 
 from drugex import util
@@ -281,8 +282,8 @@ def _main_helper(*, path, feat, alg, is_regression, batch_size, n_epoch, lr, out
 
 
 @click.command()
-@click.option('-p', '--path', type=click.Path(file_okay=True), default='data/CHEMBL251.txt', required=True)
-@click.option('-o', '--output', type=click.Path(file_okay=False, dir_okay=True), default='output', required=True)
+@click.option('-p', '--path', type=click.Path(file_okay=True), default='data/FT_ENV_data.txt')
+@click.option('-o', '--output', type=click.Path(file_okay=False, dir_okay=True), default='output')
 @click.option('--lr', type=float, default=1e-5, show_default=True)
 @click.option('--batch-size', type=int, default=1024, show_default=True)
 @click.option('--n-epoch', type=int, default=1000, show_default=True)
