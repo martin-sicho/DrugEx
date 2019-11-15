@@ -168,7 +168,7 @@ def main(data_directory, environment_data_file, vocabulary_file):
 
     click.echo("Parsing raw CHEMBL data at {0}".format(environment_data_file))
     environment_data_file = os.path.join(data_directory, environment_data_file)
-    output_path = os.path.join(data_directory, 'FT_data.txt')
+    output_path = os.path.join(data_directory, 'FT_ENV_data.txt')
     if os.path.exists(environment_data_file):
         A2AR(environment_data_file, output_path)
         click.echo("Done.")
