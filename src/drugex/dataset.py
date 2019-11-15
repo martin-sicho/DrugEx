@@ -18,6 +18,7 @@ import pandas as pd
 from rdkit import Chem
 from tqdm import tqdm
 
+from drugex import environ
 from drugex.util import Voc
 
 
@@ -118,8 +119,8 @@ def A2AR(input_path: str, output_path: str):
             and replacing the nitrogen electrical group to nitrogen atom "N".
     """
     df = pd.read_table(input_path)
-    df = df[['CMPD_CHEMBLID', 'CANONICAL_SMILES', 'PCHEMBL_VALUE', 'ACTIVITY_COMMENT']] # activity comment had to be added here because environ.py uses it
-    df = df.dropna() # FIXME: this eliminates a lot of molecules without an activity comment!!!
+    df = df[environ.PAIR]
+    df = df.dropna(subset=environ.PAIR[:-1]) #FIXME: this should use the name of the column rather than an index
     for i, row in df.iterrows():
         # replacing the nitrogen electrical group to nitrogen atom "N"
         smile = row['CANONICAL_SMILES'].replace('[NH+]', 'N').replace('[NH2+]', 'N').replace('[NH3+]', 'N')
