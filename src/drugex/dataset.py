@@ -87,7 +87,7 @@ class CorpusCSV(Corpus):
         log.to_csv(out, sep='\t', index=None)
 
     def getMolData(self):
-        pass # TODO: implement
+        raise NotImplementedError # TODO: implement
 
 
 def ZINC(folder: str, out: str):
