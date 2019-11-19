@@ -22,6 +22,9 @@ from sklearn.externals import joblib
 from torch.utils.data import DataLoader, TensorDataset
 
 from drugex import util
+from drugex.api.environ.data import EnvironData
+from drugex.api.environ.models import EnvironModel
+from drugex.api.environ.training import EnvironTrainer
 from drugex.model import MTFullyConnected, STFullyConnected
 
 
@@ -70,8 +73,7 @@ def DNN(X, y, X_ind, y_ind, out, is_regression=False, *, batch_size, n_epoch, lr
     cv, ind = y == y, y_ind == y_ind
     return cvs[cv], inds[ind] / 5
 
-
-def RF(X, y, X_ind, y_ind, is_regression=False, n_folds=5):
+class RF(EnvironModel):
     """Cross Validation and independent set test for Random Forest model
 
     Arguments:
@@ -90,24 +92,55 @@ def RF(X, y, X_ind, y_ind, is_regression=False, n_folds=5):
          cvs (ndarray): cross-validation results. The shape is (m, ), m is the No. of samples.
          inds (ndarray): independent test results. It has similar data structure as cvs.
         """
-    if is_regression:
-        folds = KFold(n_folds).split(X)
-        alg = RandomForestRegressor
-    else:
-        folds = StratifiedKFold(n_folds).split(X, y)
-        alg = RandomForestClassifier
-    cvs = np.zeros(y.shape)
-    inds = np.zeros(y_ind.shape)
-    for i, (trained, valided) in enumerate(folds):
-        model = alg(n_estimators=500, n_jobs=1)
-        model.fit(X[trained], y[trained])
-        if is_regression:
-            cvs[valided] = model.predict(X[valided])
-            inds += model.predict(X_ind)
+
+    def __init__(self, train_provider : EnvironData, test_provider=None, n_folds=5, params={"n_estimators" : 1000, "n_jobs" : 10}):
+        super().__init__(train_provider, test_provider)
+        if not self.test_provider:
+            self.test_provider = train_provider
+        self.n_folds = n_folds
+        self.params = params
+        self.cvs = None
+        self.inds = None
+
+    def fit(self):
+        X = self.train_provider.getX()
+        y = self.train_provider.gety()[:, 0]
+        X_ind = self.test_provider.getX()
+        y_ind = self.test_provider.gety()[:, 0]
+
+        if self.train_provider.is_regression:
+            folds = KFold(self.n_folds).split(X)
+            alg = RandomForestRegressor
         else:
-            cvs[valided] = model.predict_proba(X[valided])[:, 1]
-            inds += model.predict_proba(X_ind)[:, 1]
-    return cvs, inds / 5
+            folds = StratifiedKFold(self.n_folds).split(X, y)
+            alg = RandomForestClassifier
+        self.cvs = np.zeros(y.shape)
+        self.inds = np.zeros(y_ind.shape)
+        for i, (trained, valided) in enumerate(folds):
+            model = alg(**self.params)
+            model.fit(X[trained], y[trained])
+            if self.train_provider.is_regression:
+                self.cvs[valided] = model.predict(X[valided])
+                self.inds += model.predict(X_ind)
+            else:
+                self.cvs[valided] = model.predict_proba(X[valided])[:, 1]
+                self.inds += model.predict_proba(X_ind)[:, 1]
+        self.inds = self.inds / 5
+
+        # fit the model on the whole set
+        self.model = alg(**self.params)
+        self.model.fit(X, y)
+
+        return self.getPerfData()
+
+    def save(self, filename):
+        joblib.dump(self.model, filename)
+
+    def getPerfData(self):
+        cv = self.train_provider.getGroundTruthData()
+        test = self.test_provider.getGroundTruthData()
+        cv['SCORE'], test['SCORE'] = self.cvs, self.inds
+        return cv, test
 
 
 def SVM(X, y, X_ind, y_ind, is_reg=False):
@@ -221,48 +254,87 @@ def NB(X, y, X_ind, y_ind):
     return cvs, inds / 5
 
 
-PAIR = ['CMPD_CHEMBLID', 'CANONICAL_SMILES', 'PCHEMBL_VALUE', 'ACTIVITY_COMMENT']
+class ChEMBLCSV(EnvironData):
+
+    def __init__(self, input_file : str, activity_threshold=None, subsample_size=None):
+        super().__init__(subsample_size=subsample_size)
+        self.PAIR = ['CMPD_CHEMBLID', 'CANONICAL_SMILES', 'PCHEMBL_VALUE', 'ACTIVITY_COMMENT']
+        self.activity_threshold = activity_threshold
+        if self.activity_threshold is not None:
+            self.is_regression = False
+        else:
+            self.is_regression = True
+        self.input_file = input_file
+        self.df = pd.DataFrame()
+        self.X = None
+        self.y = None
+        self.update()
+
+    def getSMILES(self):
+        return self.df.CANONICAL_SMILES
+
+    def update(self):
+        if self.subsample_size is not None:
+            self.df = pd.read_table(self.input_file).sample(self.subsample_size)
+        else:
+            self.df = pd.read_table(self.input_file)
+        self.df = self.df[self.PAIR].set_index(self.PAIR[0])
+        self.df[self.PAIR[2]] = self.df.groupby(self.df.index).mean()
+
+        # The molecules that have PChEMBL value
+        numery = self.df[self.PAIR[1:-1]].drop_duplicates().dropna()
+        if self.is_regression:
+            self.df = numery
+            self.y = numery[self.PAIR[2:3]].values
+        else:
+            # The molecules that do not have PChEMBL value
+            # but has activity comment to show whether it is active or not.
+            binary = self.df[self.df.ACTIVITY_COMMENT.str.contains('Active') == True].drop_duplicates()
+            binary = binary[~binary.index.isin(numery.index)]
+            # binary.loc[binary.ACTIVITY_COMMENT == 'Active', 'PCHEMBL_VALUE'] = 100.0
+            binary.loc[binary.ACTIVITY_COMMENT.str.contains('Not'), 'PCHEMBL_VALUE'] = 0.0
+            binary = binary[self.PAIR[1:3]].dropna().drop_duplicates()
+            self.df = numery.append(binary)
+            # For is_regression model the active ligand is defined as
+            # PChBMBL value >= activity_threshold
+            self.y = (self.df[self.PAIR[2:3]] >= self.activity_threshold).astype(float).values
+
+        # ECFP6 fingerprints extraction
+        self.X = util.Environment.ECFP_from_SMILES(self.df.CANONICAL_SMILES).values
+    def getX(self):
+        return self.X
+
+    def gety(self):
+        return self.y
+
+    def getGroundTruthData(self):
+        data = pd.DataFrame()
+        data['CANONICAL_SMILES'], data['LABEL'] = self.getSMILES(), self.gety()[:, 0]
+        return data
 
 
 # Model performance and saving
 def _main_helper(*, path, feat, alg, is_regression, batch_size, n_epoch, lr, output):
-    df = pd.read_table(path)
-    df = df[PAIR].set_index(PAIR[0])
-    df[PAIR[2]] = df.groupby(df.index).mean()
-    # The molecules that have PChEMBL value
-    numery = df[PAIR[1:-1]].drop_duplicates().dropna()
-    if is_regression:
-        df = numery
-        y = numery[PAIR[2:3]].values
-    else:
-        # The molecules that do not have PChEMBL value
-        # but has activity comment to show whether it is active or not.
-        binary = df[df.ACTIVITY_COMMENT.str.contains('Active') == True].drop_duplicates()
-        binary = binary[~binary.index.isin(numery.index)]
-        # binary.loc[binary.ACTIVITY_COMMENT == 'Active', 'PCHEMBL_VALUE'] = 100.0
-        binary.loc[binary.ACTIVITY_COMMENT.str.contains('Not'), 'PCHEMBL_VALUE'] = 0.0
-        binary = binary[PAIR[1:3]].dropna().drop_duplicates()
-        df = numery.append(binary)
-        # For classification model the active ligand is defined as
-        # PChBMBL value >= 6.5
-        y = (df[PAIR[2:3]] >= 6.5).astype(float).values
-    # ECFP6 fingerprints extraction
-    X = util.Environment.ECFP_from_SMILES(df.CANONICAL_SMILES).values
-
     os.makedirs(output, exist_ok=True)
     out = os.path.join(output, '%s_%s_%s' % (alg, 'reg' if is_regression else 'cls', feat))
 
-    # Model training and saving
+    # Model training and saving with RF
+    # TODO: unify all algorithms under this interface
+    data_chembl = ChEMBLCSV(path, 6.5, subsample_size=500)
     if alg == "RF":
-        model = RandomForestClassifier(n_estimators=1000, n_jobs=10)
-        model.fit(X, y[:, 0])
-        joblib.dump(model, out+'.pkg')
+        trainer = EnvironTrainer(
+            RF(train_provider=data_chembl, test_provider=data_chembl)
+        )
+        trainer.train()
+        trainer.saveModel(out+'.pkg')
+        trainer.savePerfData(out + '.cv.txt', out + '.ind.txt')
+        return
 
+    X = data_chembl.getX()
+    y = data_chembl.gety()
     # Cross validation and independent test
-    data = pd.DataFrame()
-    test = pd.DataFrame()
-    data['CANONICAL_SMILES'], data['LABEL'] = df.CANONICAL_SMILES, y[:, 0]
-    test['CANONICAL_SMILES'], test['LABEL'] = df.CANONICAL_SMILES, y[:, 0]
+    data = data_chembl.getGroundTruthData()
+    test = data_chembl.getGroundTruthData()
     if alg == 'SVM':
         cv, ind = SVM(X, y[:, 0], X, y[:, 0])
     elif alg == 'KNN':
@@ -271,8 +343,6 @@ def _main_helper(*, path, feat, alg, is_regression, batch_size, n_epoch, lr, out
         cv, ind = NB(X, y[:, 0], X, y[:, 0])
     elif alg == 'DNN':
         cv, ind = DNN(X, y, X, y, out=out, is_regression=is_regression, batch_size=batch_size, n_epoch=n_epoch, lr=lr)
-    elif alg == 'RF':
-        cv, ind = RF(X, y[:, 0], X, y[:, 0], is_regression=is_regression)
     else:
         raise ValueError('Invalid algorithm: {}'.format(alg))
 
