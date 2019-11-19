@@ -18,66 +18,76 @@ import pandas as pd
 from rdkit import Chem
 from tqdm import tqdm
 
-from drugex import environ
+from drugex.api.corpus import Corpus
 from drugex.util import Voc
 
+class CorpusCSV(Corpus):
 
-SUB_RE = re.compile(r'\[\d+')
+    def __init__(self, input_file: str, vocab_path : str, smiles_column='CANONICAL_SMILES', sep='\t'):
+        super().__init__(vocabulary=Voc(vocab_path))
+        self.input_file = input_file
+        self.smiles_column = smiles_column
+        self.sep = sep
 
+    def update(self):
+        """Constructing the molecular corpus by splitting each SMILES into
+        a range of tokens contained in vocabulary.
 
-def corpus(input: str, out: str, *, vocab_path: str):
-    """Constructing the molecular corpus by splitting each SMILES into
-    a range of tokens contained in vocabulary.
+        Arguments:
+            input : the path of tab-delimited data file that contains CANONICAL_SMILES.
+            out : the path for vocabulary (containing all of tokens for SMILES construction)
+                and output table (including CANONICAL_SMILES and whitespace delimited token sentence)
+        """
+        self.tokens = []
+        self.canons = []
+        self.words = set()
 
-    Arguments:
-        input : the path of tab-delimited data file that contains CANONICAL_SMILES.
-        out : the path for vocabulary (containing all of tokens for SMILES construction)
-            and output table (including CANONICAL_SMILES and whitespace delimited token sentence)
-    """
-    df = pd.read_table(input).CANONICAL_SMILES.dropna()
-    voc = Voc(vocab_path)
-    canons = []
-    tokens = []
-    smiles = set()
-    it = tqdm(df, desc='Reading SMILES')
-    for smile in it:
-        # replacing the radioactive atom into nonradioactive atom
-        smile = SUB_RE.sub('[', smile)
-        # reserving the largest one if the molecule contains more than one fragments,
-        # which are separated by '.'.
-        if '.' in smile:
-            frags = smile.split('.')
-            ix = np.argmax([len(frag) for frag in frags])
-            smile = frags[ix]
-            # TODO replace with: smile = max(frags, key=len)
-        # if it doesn't contain carbon atom, it cannot be drug-like molecule, just remove
-        if smile.count('C') + smile.count('c') < 2:
-            continue
-        if smile in smiles:
-            it.write('duplicate: {}'.format(smile))
-        smiles.add(smile)
-    # collecting all of the tokens in the sentences for vocabulary construction.
-    words = set()
-    it = tqdm(smiles, desc='Collecting tokens')
-    for smile in it:
-        try:
-            token = voc.tokenize(smile)
-            if len(token) <= 100:
-                words.update(token)
-                canons.append(Chem.CanonSmiles(smile, 0))
-                tokens.append(' '.join(token))
-        except Exception as e:
-            it.write('{} {}'.format(e, smile))
-    # persisting the vocabulary on the hard drive.
-    with open(out + '_voc.txt', 'w') as file:
-        file.write('\n'.join(sorted(words)))
+        df = pd.read_table(self.input_file, sep=self.sep)[self.smiles_column].dropna().drop_duplicates()
+        smiles = set()
+        it = tqdm(df, desc='Reading SMILES')
+        for smile in it:
+            # replacing the radioactive atom into nonradioactive atom
+            smile = self.sub_re.sub('[', smile)
+            # reserving the largest one if the molecule contains more than one fragments,
+            # which are separated by '.'.
+            if '.' in smile:
+                frags = smile.split('.')
+                ix = np.argmax([len(frag) for frag in frags])
+                smile = frags[ix]
+                # TODO replace with: smile = max(frags, key=len)
+            # if it doesn't contain carbon atom, it cannot be drug-like molecule, just remove
+            if smile.count('C') + smile.count('c') < 2:
+                continue
+            if smile in smiles:
+                it.write('duplicate: {}'.format(smile))
+            smiles.add(smile)
+        # collecting all of the tokens in the sentences for vocabulary construction.
+        it = tqdm(smiles, desc='Collecting tokens')
+        for smile in it:
+            try:
+                token = self.voc.tokenize(smile)
+                if len(token) <= 100:
+                    self.words.update(token)
+                    self.canons.append(Chem.CanonSmiles(smile, 0))
+                    self.tokens.append(' '.join(token))
+            except Exception as e:
+                it.write('{} {}'.format(e, smile))
 
-    # saving the canonical smiles and token sentences as a table into hard drive.
-    log = pd.DataFrame()
-    log['CANONICAL_SMILES'] = canons
-    log['SENT'] = tokens
-    log.drop_duplicates(subset='CANONICAL_SMILES')
-    log.to_csv(out + '_corpus.txt', sep='\t', index=None)
+    def saveVoc(self, out):
+        # persisting the vocabulary on the hard drive.
+        with open(out, 'w') as file:
+            file.write('\n'.join(sorted(self.words)))
+
+    def saveCorpus(self, out):
+        # saving the canonical smiles and token sentences as a table into hard drive.
+        log = pd.DataFrame()
+        log['CANONICAL_SMILES'] = self.canons
+        log['SENT'] = self.tokens
+        log.drop_duplicates(subset='CANONICAL_SMILES')
+        log.to_csv(out, sep='\t', index=None)
+
+    def getMolData(self):
+        pass # TODO: implement
 
 
 def ZINC(folder: str, out: str):
@@ -119,8 +129,9 @@ def A2AR(input_path: str, output_path: str):
             and replacing the nitrogen electrical group to nitrogen atom "N".
     """
     df = pd.read_table(input_path)
-    df = df[environ.PAIR]
-    df = df.dropna(subset=environ.PAIR[:-1]) #FIXME: this should use the name of the column rather than an index
+    PAIR = ['CMPD_CHEMBLID', 'CANONICAL_SMILES', 'PCHEMBL_VALUE', 'ACTIVITY_COMMENT']
+    df = df[PAIR]
+    df = df.dropna(subset=PAIR[:-1])
     for i, row in df.iterrows():
         # replacing the nitrogen electrical group to nitrogen atom "N"
         smile = row['CANONICAL_SMILES'].replace('[NH+]', 'N').replace('[NH2+]', 'N').replace('[NH3+]', 'N')
@@ -158,7 +169,10 @@ def main(data_directory, environment_data_file, vocabulary_file):
     zinc_processed = os.path.exists(os.path.join(data_directory, 'zinc_corpus.txt')) \
                  and os.path.exists(os.path.join(data_directory, 'zinc_voc.txt'))
     if os.path.exists(zinc_output_path) and not zinc_processed:
-        corpus(zinc_output_path, os.path.join(data_directory, 'zinc'), vocab_path=os.path.join(data_directory, vocabulary_file))
+        corpus = CorpusCSV(zinc_output_path, vocab_path=os.path.join(data_directory, vocabulary_file))
+        corpus.update()
+        corpus.saveVoc(os.path.join(data_directory, 'zinc_voc.txt'))
+        corpus.saveCorpus(os.path.join(data_directory, 'zinc_corpus.txt'))
         click.echo("Done.")
     elif zinc_processed:
         click.echo('ZINC data was already processed (corpus and vocabulary files generated). Skipping...', err=True)
@@ -166,8 +180,23 @@ def main(data_directory, environment_data_file, vocabulary_file):
     else:
         raise FileNotFoundError('Missing ZINC output file: {}'.format(zinc_output_path))
 
-    click.echo("Parsing raw CHEMBL data at {0}".format(environment_data_file))
     environment_data_file = os.path.join(data_directory, environment_data_file)
+    click.echo("Generating ChEMBL corpus from: {0}".format(environment_data_file))
+    chembl_processed = os.path.exists(os.path.join(data_directory, 'chembl_corpus.txt')) \
+                 and os.path.exists(os.path.join(data_directory, 'chembl_voc.txt'))
+    if os.path.exists(environment_data_file) and not chembl_processed:
+        corpus = CorpusCSV(environment_data_file, vocab_path=os.path.join(data_directory, vocabulary_file))
+        corpus.update()
+        corpus.saveVoc(os.path.join(data_directory, 'chembl_voc.txt'))
+        corpus.saveCorpus(os.path.join(data_directory, 'chembl_corpus.txt'))
+        click.echo("Done.")
+    elif chembl_processed:
+        click.echo('ChEMBL data was already processed (corpus and vocabulary files generated). Skipping...', err=True)
+        pass
+    else:
+        raise FileNotFoundError('Missing ChEMBL output file: {}'.format(environment_data_file))
+
+    click.echo("Parsing environment CHEMBL data at {0}".format(environment_data_file))
     output_path = os.path.join(data_directory, 'FT_ENV_data.txt')
     if os.path.exists(environment_data_file):
         A2AR(environment_data_file, output_path)
