@@ -10,57 +10,76 @@ from abc import ABC, abstractmethod
 import numpy as np
 import pandas as pd
 from rdkit import Chem
+from torch.utils.data import DataLoader
 from tqdm import tqdm
 
+from drugex import util
 from drugex.util import Voc
 
 class Corpus(ABC):
 
-    def __init__(self, vocabulary : Voc):
+    def __init__(self, vocabulary : Voc, data_loader_cls = DataLoader):
         self.voc = vocabulary
-        self.words = set()
-        self.canons = []
-        self.tokens = []
+        self.words = set(self.voc.chars)
         self.sub_re = re.compile(r'\[\d+')
+        self.loader_cls = data_loader_cls
 
     @abstractmethod
-    def getMolData(self):
-        pass
+    def getDataLoader(self, sample_size=None, exclude_sampled=True, loader_params=None):
+        """
+        Copnverts the underlying corpus data to a `DataLoader` instance.
+        A subsample of the original data can be requested by specifying
+        `sample_size`. The `exclude_sampled` can be used to keep
+        track of the sampled data and exclude it in a future request.
+        The exculded data points are returned back to the pool when
+        they were ignored exactly once.
 
-    @abstractmethod
-    def update(self):
-        pass
+        :param sample_size: size of a sample (if None whole dataset is returned)
+        :param exclude_sampled: if this is True and `sample_size` is specified, the sampled data will be excluded the next time we return a data loader
+        :param loader_params: parameters for the data loader as a dictionary
+        :return: a data loader to use in training
+        """
 
-    @abstractmethod
-    def saveVoc(self, filename):
-        pass
-
-    @abstractmethod
-    def saveCorpus(self, filename):
         pass
 
 class CorpusCSV(Corpus):
 
-    def __init__(self, input_file: str, vocab_path : str, smiles_column='CANONICAL_SMILES', sep='\t'):
-        super().__init__(vocabulary=Voc(vocab_path))
-        self.input_file = input_file
-        self.smiles_column = smiles_column
-        self.sep = sep
+    @staticmethod
+    def fromFiles(
+            corpus_path
+            , vocab_path
+            , smiles_column='CANONICAL_SMILES'
+            , sep='\t'
+            , token="SENT"
+            , n_rows=None
+    ):
+        ret = CorpusCSV(Voc(vocab_path), token=token, smiles_column=smiles_column, sep=sep)
+        ret.df = pd.read_table(corpus_path) if not n_rows else pd.read_table(corpus_path, nrows=n_rows)
+        return ret
 
-    def update(self):
+    def __init__(self, vocabulary : Voc, data_loader_cls = DataLoader, smiles_column='CANONICAL_SMILES', sep='\t', token="SENT"):
+        super().__init__(vocabulary=vocabulary, data_loader_cls=data_loader_cls)
+        self.smiles_column = smiles_column
+        self.token = token
+        self.sep = sep
+        self.df = pd.DataFrame()
+        self.sampled_idx = None
+
+    def update(self, input_file):
         """Constructing the molecular corpus by splitting each SMILES into
         a range of tokens contained in vocabulary.
 
         Arguments:
-            input : the path of tab-delimited data file that contains CANONICAL_SMILES.
+            input_file : the path of tab-delimited data file that contains CANONICAL_SMILES.
             out : the path for vocabulary (containing all of tokens for SMILES construction)
                 and output table (including CANONICAL_SMILES and whitespace delimited token sentence)
         """
-        self.tokens = []
-        self.canons = []
+        tokens = []
+        canons = []
         self.words = set()
+        self.df = pd.DataFrame()
 
-        df = pd.read_table(self.input_file, sep=self.sep)[self.smiles_column].dropna().drop_duplicates()
+        df = pd.read_table(input_file, sep=self.sep)[self.smiles_column].dropna().drop_duplicates()
         smiles = set()
         it = tqdm(df, desc='Reading SMILES')
         for smile in it:
@@ -86,10 +105,15 @@ class CorpusCSV(Corpus):
                 token = self.voc.tokenize(smile)
                 if len(token) <= 100:
                     self.words.update(token)
-                    self.canons.append(Chem.CanonSmiles(smile, 0))
-                    self.tokens.append(' '.join(token))
+                    canons.append(Chem.CanonSmiles(smile, 0))
+                    tokens.append(' '.join(token))
             except Exception as e:
                 it.write('{} {}'.format(e, smile))
+
+        # saving the canonical smiles and token sentences as a basis for future transformations
+        self.df[self.smiles_column] = canons
+        self.df[self.token] = tokens
+        self.df.drop_duplicates(subset=self.smiles_column)
 
     def saveVoc(self, out):
         # persisting the vocabulary on the hard drive.
@@ -97,12 +121,22 @@ class CorpusCSV(Corpus):
             file.write('\n'.join(sorted(self.words)))
 
     def saveCorpus(self, out):
-        # saving the canonical smiles and token sentences as a table into hard drive.
-        log = pd.DataFrame()
-        log['CANONICAL_SMILES'] = self.canons
-        log['SENT'] = self.tokens
-        log.drop_duplicates(subset='CANONICAL_SMILES')
-        log.to_csv(out, sep='\t', index=None)
+        self.df.to_csv(out, sep=self.sep, index=None)
 
-    def getMolData(self):
-        raise NotImplementedError # TODO: implement
+    def getDataLoader(self, sample_size=None, exclude_sampled=True, loader_params=None):
+        if self.loader_cls == DataLoader:
+            if sample_size is None:
+                sample = self.df.drop(self.sampled_idx) if self.sampled_idx is not None else self.df
+                self.sampled_idx = None
+            else:
+                sample = self.df.drop(self.sampled_idx).sample(sample_size) if self.sampled_idx else self.df.sample(sample_size)
+                self.sampled_idx = None
+                if exclude_sampled:
+                    self.sampled_idx = sample.index
+            sample = util.MolData(sample, self.voc, token='SENT')
+            if loader_params:
+                return self.loader_cls(sample, **loader_params)
+            else:
+                return self.loader_cls(sample)
+        else:
+            raise NotImplementedError("Uninplemented data loader requested: {0}".format(self.loader_cls))
