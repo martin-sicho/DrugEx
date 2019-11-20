@@ -11,7 +11,7 @@ import time
 
 import numpy as np
 import torch
-from tqdm import trange
+from tqdm import trange, tqdm
 from torch import nn, optim
 from torch.nn import functional as F
 
@@ -418,8 +418,8 @@ class Generator(nn.Module):
         optimizer = optim.Adam(self.parameters(), lr=lr)
         log = open(log_path, 'w')
         best_error = np.inf
-        for epoch in trange(epochs, desc='Fitting generator'):
-            for i, batch in enumerate(loader_train):
+        for epoch in trange(epochs, desc='Epoch'):
+            for i, batch in enumerate(tqdm(loader_train, desc="Batch")):
                 optimizer.zero_grad()
                 loss_train = self.likelihood(batch.to(util.dev))
                 loss_train = -loss_train.mean()
