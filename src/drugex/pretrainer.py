@@ -6,57 +6,66 @@
 In this project, it is trained on ZINC set and A2AR set collected by
 dataset.py. In the end, RNN model can generate molecule library.
 """
+import torch
 
 import os
 
 import click
-import pandas as pd
-import torch as T
-from torch.utils.data import DataLoader
 
-from drugex import model, util
+from drugex import util
+from drugex.api.corpus import CorpusCSV
+from drugex.api.pretrain.training import LoggingPretrainer
 
 
 def _main_helper(*, input_directory, batch_size, epochs_pr, epochs_ex, output_directory, use_tqdm=False):
-    # Construction of the vocabulary
-    voc = util.Voc(os.path.join(input_directory, "voc.txt"))
-
-    os.makedirs(output_directory, exist_ok=True)
-
-    net_ex_pickle_path = os.path.join(output_directory, 'net_ex.pkg')
-    net_ex_log_path = os.path.join(output_directory, 'net_ex.log')
-
-    net_pr_pickle_path = os.path.join(output_directory, 'net_pr.pkg')
-    net_pr_log_path = os.path.join(output_directory, 'net_pr.log')
+    # Construction of the pretrainer corpus
+    voc_file = os.path.join(input_directory, "voc.txt")
+    zinc_corpus = os.path.join(input_directory, "zinc_corpus.txt")
+    pre_corpus = CorpusCSV.fromFiles(corpus_path=zinc_corpus, vocab_path=voc_file)
 
     # Pre-training the RNN model with ZINC set
-    prior = model.Generator(voc)
-    if not os.path.exists(net_pr_pickle_path):
+    prior = LoggingPretrainer(
+        pre_corpus
+        , out_dir=output_directory
+        , out_identifier="pr"
+        , train_params={
+            "epochs" : epochs_pr
+        }
+    )
+    if not os.path.exists(prior.net_pickle_path):
         print('Exploitation network begins to be trained...')
-        zinc = util.MolData(os.path.join(input_directory, "zinc_corpus.txt"), voc, token='SENT')
-        zinc = DataLoader(zinc, batch_size=batch_size, shuffle=True, drop_last=True, collate_fn=zinc.collate_fn)
-        prior.fit(zinc, out_path=net_pr_pickle_path, log_path=net_pr_log_path, epochs=epochs_pr)
+        prior.train(train_loader_params={
+            "batch_size" : batch_size
+            , "shuffle" : True
+            , "drop_last" : True
+            , "collate_fn" : util.MolData.collate_fn
+        })
         print('Exploitation network training is finished!')
-    # TODO is this necessary if it just got trained?
-    prior.load_state_dict(T.load(net_pr_pickle_path))
 
     # Fine-tuning the RNN model with A2AR set as exploration stragety
-    explore = model.Generator(voc)
-    df = pd.read_table(os.path.join(input_directory, 'chembl_corpus.txt')).drop_duplicates('CANONICAL_SMILES')
-    valid = df.sample(batch_size)
-    train = df.drop(valid.index)
-    explore.load_state_dict(T.load(net_pr_pickle_path))
-
-    # Training set and its data loader
-    train = util.MolData(train, voc, token='SENT')
-    train = DataLoader(train, batch_size=batch_size, collate_fn=train.collate_fn)
-
-    # Validation set and its data loader
-    valid = util.MolData(valid, voc, token='SENT')
-    valid = DataLoader(valid, batch_size=batch_size, collate_fn=valid.collate_fn)
-
+    chembl_corpus = os.path.join(input_directory, 'chembl_corpus.txt')
+    ex_corpus = CorpusCSV.fromFiles(corpus_path=chembl_corpus, vocab_path=voc_file)
+    explore = LoggingPretrainer(
+        ex_corpus
+        , out_dir=output_directory
+        , out_identifier="ex"
+        , initial_state=prior.net_pickle_path
+        , train_params={
+            "epochs" : epochs_ex
+        }
+    )
     print('Exploration network begins to be trained...')
-    explore.fit(train, loader_valid=valid, out_path=net_ex_pickle_path, epochs=epochs_ex, log_path=net_ex_log_path)
+    explore.train(
+        train_loader_params={
+            "batch_size" : batch_size
+            , "collate_fn" : util.MolData.collate_fn
+        }
+        , validation_size=batch_size
+        , valid_loader_params={
+            "batch_size" : batch_size
+            , "collate_fn" : util.MolData.collate_fn
+        }
+    )
     print('Exploration network training is finished!')
 
 
@@ -64,13 +73,13 @@ def _main_helper(*, input_directory, batch_size, epochs_pr, epochs_ex, output_di
 @click.option('-d', '--input-directory', type=click.Path(dir_okay=True, file_okay=False), default='data')
 @click.option('-o', '--output-directory', type=click.Path(dir_okay=True, file_okay=False), default='output')
 @click.option('-b', '--batch-size', type=int, default=512, show_default=True)
-@click.option('-p', '--epochs-pr', type=int, default=512, show_default=True)
-@click.option('-e', '--epochs-ex', type=int, default=512, show_default=True)
-@click.option('-g', '--cuda', default="0")
+@click.option('-p', '--epochs-pr', type=int, default=300, show_default=True)
+@click.option('-e', '--epochs-ex', type=int, default=400, show_default=True)
+@click.option('-g', '--gpu', type=int, default=0)
 @click.option('--use-tqdm', is_flag=True)
-def main(input_directory, output_directory, batch_size, epochs_pr, epochs_ex, cuda, use_tqdm):
-    if cuda:
-        os.environ["CUDA_VISIBLE_DEVICES"] = cuda
+def main(input_directory, output_directory, batch_size, epochs_pr, epochs_ex, gpu, use_tqdm):
+    if gpu:
+        torch.cuda.set_device(gpu)
     _main_helper(
         input_directory=input_directory,
         output_directory=output_directory,
