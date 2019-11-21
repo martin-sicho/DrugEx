@@ -23,8 +23,7 @@ from torch.utils.data import DataLoader, TensorDataset
 
 from drugex import util
 from drugex.api.environ.data import EnvironData
-from drugex.api.environ.models import EnvironModel
-from drugex.api.environ.training import EnvironTrainer
+from drugex.api.environ.models import Environ, FileEnvSerializer
 from drugex.model import MTFullyConnected, STFullyConnected
 
 
@@ -73,7 +72,7 @@ def DNN(X, y, X_ind, y_ind, out, is_regression=False, *, batch_size, n_epoch, lr
     cv, ind = y == y, y_ind == y_ind
     return cvs[cv], inds[ind] / 5
 
-class RF(EnvironModel):
+class RF(Environ):
     """Cross Validation and independent set test for Random Forest model
 
     Arguments:
@@ -97,10 +96,13 @@ class RF(EnvironModel):
         super().__init__(train_provider, test_provider)
         if not self.test_provider:
             self.test_provider = train_provider
+        self.is_regression = train_provider.is_regression
         self.n_folds = n_folds
         self.params = params
         self.cvs = None
         self.inds = None
+        self.alg = RandomForestRegressor if self.is_regression else RandomForestClassifier
+        self.model = None
 
     def fit(self):
         X = self.train_provider.getX()
@@ -108,33 +110,36 @@ class RF(EnvironModel):
         X_ind = self.test_provider.getX()
         y_ind = self.test_provider.gety()[:, 0]
 
-        if self.train_provider.is_regression:
+        if self.is_regression:
             folds = KFold(self.n_folds).split(X)
-            alg = RandomForestRegressor
         else:
             folds = StratifiedKFold(self.n_folds).split(X, y)
-            alg = RandomForestClassifier
         self.cvs = np.zeros(y.shape)
         self.inds = np.zeros(y_ind.shape)
         for i, (trained, valided) in enumerate(folds):
-            model = alg(**self.params)
+            model = self.alg(**self.params)
             model.fit(X[trained], y[trained])
-            if self.train_provider.is_regression:
+            if self.is_regression:
                 self.cvs[valided] = model.predict(X[valided])
                 self.inds += model.predict(X_ind)
             else:
                 self.cvs[valided] = model.predict_proba(X[valided])[:, 1]
                 self.inds += model.predict_proba(X_ind)[:, 1]
-        self.inds = self.inds / 5
+        self.inds = self.inds / self.n_folds
 
         # fit the model on the whole set
-        self.model = alg(**self.params)
+        self.model = self.alg(**self.params)
         self.model.fit(X, y)
 
         return self.getPerfData()
 
-    def save(self, filename):
-        joblib.dump(self.model, filename)
+    def predictSMILES(self, smiles):
+        fps = util.Environment.ECFP_from_SMILES(smiles)
+        if self.is_regression:
+            preds = self.model.predict(fps)
+        else:
+            preds = self.model.predict_proba(fps)[:, 1]
+        return preds
 
     def getPerfData(self):
         cv = self.train_provider.getGroundTruthData()
@@ -316,18 +321,16 @@ class ChEMBLCSV(EnvironData):
 # Model performance and saving
 def _main_helper(*, path, feat, alg, is_regression, batch_size, n_epoch, lr, output):
     os.makedirs(output, exist_ok=True)
-    out = os.path.join(output, '%s_%s_%s' % (alg, 'reg' if is_regression else 'cls', feat))
+    out = os.path.join(output, )
 
     # Model training and saving with RF
     # TODO: unify all algorithms under this interface
     data_chembl = ChEMBLCSV(path, 6.5, subsample_size=500)
     if alg == "RF":
-        trainer = EnvironTrainer(
-            RF(train_provider=data_chembl, test_provider=data_chembl)
-        )
-        trainer.train()
-        trainer.saveModel(out+'.pkg')
-        trainer.savePerfData(out + '.cv.txt', out + '.ind.txt')
+        model = RF(train_provider=data_chembl, test_provider=data_chembl)
+        model.fit()
+        ser = FileEnvSerializer(out_dir=output, identifier='%s_%s_%s' % (alg, 'reg' if is_regression else 'cls', feat), include_perf=True)
+        model.save(serializer=ser)
         return
 
     X = data_chembl.getX()

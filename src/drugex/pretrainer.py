@@ -45,15 +45,18 @@ def _main_helper(*, input_directory, batch_size, epochs_pr, epochs_ex, output_di
     # Fine-tuning the RNN model with A2AR set as exploration stragety
     chembl_corpus = os.path.join(input_directory, 'chembl_corpus.txt')
     ex_corpus = CorpusCSV.fromFiles(corpus_path=chembl_corpus, vocab_path=voc_file)
-    explore = BasicGenerator(
+    ser = BasicGenerator.BasicDeserializer(
         ex_corpus
         , out_dir=output_directory
+        , in_dir=output_directory
+        , in_identifier="pr"
         , out_identifier="ex"
-        , initial_state=prior.net_pickle_path
         , train_params={
             "epochs" : epochs_ex
         }
     )
+    explore = BasicGenerator.load(ser)
+
     print('Exploration network begins to be trained...')
     explore.train(
         train_loader_params={
