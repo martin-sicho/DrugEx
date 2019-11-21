@@ -14,7 +14,7 @@ import click
 
 from drugex import util
 from drugex.api.corpus import CorpusCSV
-from drugex.api.pretrain.training import LoggingPretrainer
+from drugex.api.pretrain.generators import BasicGenerator
 
 
 def _main_helper(*, input_directory, batch_size, epochs_pr, epochs_ex, output_directory, use_tqdm=False):
@@ -24,7 +24,7 @@ def _main_helper(*, input_directory, batch_size, epochs_pr, epochs_ex, output_di
     pre_corpus = CorpusCSV.fromFiles(corpus_path=zinc_corpus, vocab_path=voc_file)
 
     # Pre-training the RNN model with ZINC set
-    prior = LoggingPretrainer(
+    prior = BasicGenerator(
         pre_corpus
         , out_dir=output_directory
         , out_identifier="pr"
@@ -45,7 +45,7 @@ def _main_helper(*, input_directory, batch_size, epochs_pr, epochs_ex, output_di
     # Fine-tuning the RNN model with A2AR set as exploration stragety
     chembl_corpus = os.path.join(input_directory, 'chembl_corpus.txt')
     ex_corpus = CorpusCSV.fromFiles(corpus_path=chembl_corpus, vocab_path=voc_file)
-    explore = LoggingPretrainer(
+    explore = BasicGenerator(
         ex_corpus
         , out_dir=output_directory
         , out_identifier="ex"

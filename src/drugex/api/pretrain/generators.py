@@ -14,7 +14,7 @@ from drugex import model
 from drugex.api.corpus import Corpus
 
 
-class Pretrainer(ABC):
+class Generator(ABC):
 
     def __init__(self, corpus : Corpus, train_params = None, initial_state = None, generator_class = model.Generator):
         self.corpus = corpus
@@ -28,7 +28,11 @@ class Pretrainer(ABC):
     def train(self, train_loader_params, validation_size=0, valid_loader_params=None):
         pass
 
-class LoggingPretrainer(Pretrainer):
+    @abstractmethod
+    def generate(self, samples):
+        pass
+
+class BasicGenerator(Generator):
 
     def __init__(self, corpus, out_dir, out_identifier, train_params = None, initial_state = None):
         super().__init__(corpus, train_params, initial_state)
