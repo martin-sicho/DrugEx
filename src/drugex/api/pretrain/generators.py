@@ -16,12 +16,10 @@ from drugex.api.corpus import Corpus
 
 class Generator(ABC):
 
-    def __init__(self, corpus : Corpus, train_params = None, initial_state = None, generator_class = model.Generator):
+    def __init__(self, corpus : Corpus, train_params = None, generator_class = model.Generator):
         self.corpus = corpus
         self.generator_class = generator_class
         self.generator = self.generator_class(self.corpus.voc)
-        if initial_state:
-            self.generator.load_state_dict(T.load(initial_state))
         self.train_params = train_params
 
     @abstractmethod
@@ -35,7 +33,11 @@ class Generator(ABC):
 class BasicGenerator(Generator):
 
     def __init__(self, corpus, out_dir, out_identifier, train_params = None, initial_state = None):
-        super().__init__(corpus, train_params, initial_state)
+        super().__init__(corpus, train_params)
+        if initial_state:
+            self.generator.load_state_dict(T.load(initial_state))
+
+        # initialize output directories
         self.out_dir = out_dir
         os.makedirs(self.out_dir, exist_ok=True)
         self.net_pickle_path = os.path.join(self.out_dir, 'net_{0}.pkg'.format(out_identifier))

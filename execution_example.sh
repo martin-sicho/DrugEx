@@ -13,11 +13,12 @@
 # - 200 epochs during the RL training (Fig. 8) with
 #   the fine-tuned network as exploration strategy (Gφ),
 #   ε = 0.01 and β = 0.1 (based on Table 1)
+# - batch size of 512 for all networks built
 
 # data assembly and training
-python dataset.py
-python environ.py
-python pretrainer.py
+drugex dataset -d ./data/ -e A2AR_raw.txt
+drugex environ -a RF
+drugex pretrainer -b 512 -p 300 -e 400
 python agent.py -e 0.01 -b 0.1
 
 # use the trained model to sample 1000 molecules
