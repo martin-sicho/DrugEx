@@ -17,44 +17,45 @@ from torch.utils.data import DataLoader, TensorDataset
 from tqdm import trange
 
 from drugex import model, util
+from drugex.api.agent.agents import BasicDrugExAgent
+from drugex.api.agent.policy import PolicyGradient
+from drugex.api.corpus import CorpusCSV
+from drugex.api.environ.models import FileEnvDeserializer, Environ
+from drugex.api.pretrain.generators import BasicGenerator, Generator
+from drugex.util import Voc
 
+class PG(PolicyGradient):
 
-def policy_gradient(agent, environ, explore=None, *, batch_size, mc, epsilon, baseline):
-    """Training generator under reinforcement learning framework,
-    The rewoard is only the final reward given by environment (predictor).
+    def __call__(self, environ: Environ, exploit: Generator, explore=None):
+        """Training generator under reinforcement learning framework,
+        The rewoard is only the final reward given by environment (predictor).
 
-    agent (model.Generator): the exploitation network for SMILES string generation
-    environ (util.Activity): the environment provide the final reward for each SMILES
-    explore (model.Generator): the exploration network for SMILES string generation,
-        it has the same architecture with the agent.
-    """
-    seqs = []
+        agent (model.Generator): the exploitation network for SMILES string generation
+        environ (util.Activity): the environment provide the final reward for each SMILES
+        explore (model.Generator): the exploration network for SMILES string generation,
+            it has the same architecture with the agent.
+        """
 
-    # repeated sampling with MC times
-    for _ in range(mc):
-        seq = agent.sample(batch_size, explore=explore, epsilon=epsilon)
-        seqs.append(seq)
-    seqs = torch.cat(seqs, dim=0)
-    ix = util.unique(seqs)
-    seqs = seqs[ix]
-    smiles, valids = util.check_smiles(seqs, agent.voc)
+        smiles, valids, seqs = exploit.sample(
+            self.batch_size
+            , explore=explore
+            , epsilon=self.epsilon
+            , include_tensors=True
+            , mc=self.mc
+        )
 
-    # obtaining the reward
-    preds = environ(smiles)
-    preds[valids == False] = 0
-    preds -= baseline
-    preds = torch.Tensor(preds.reshape(-1, 1)).to(util.dev)
+        # obtaining the reward
+        preds = environ.predictSMILES(smiles)
+        preds[valids == False] = 0
+        preds -= self.beta
+        preds = torch.Tensor(preds.reshape(-1, 1)).to(util.dev)
 
-    ds = TensorDataset(seqs, preds)
-    loader = DataLoader(ds, batch_size=batch_size)
+        ds = TensorDataset(seqs, preds)
+        loader = DataLoader(ds, batch_size=self.batch_size)
 
-    # Training Loop
-    for seq, pred in loader:
-        score = agent.likelihood(seq)
-        agent.optim.zero_grad()
-        loss = agent.PGLoss(score, pred)
-        loss.backward()
-        agent.optim.step()
+        # Training Loop
+        for seq, pred in loader:
+            exploit.policyUpdate(seq, pred)
 
 
 def rollout_pg(agent, environ, explore=None, *, batch_size, baseline, mc, epsilon):
@@ -102,69 +103,58 @@ def rollout_pg(agent, environ, explore=None, *, batch_size, baseline, mc, epsilo
 
 def _main_helper(*, epsilon, baseline, batch_size, mc, vocabulary_path, output_dir):
     #: Vocabulary containing all of the tokens for SMILES construction
-    voc = util.Voc(vocabulary_path)
+    corpus = CorpusCSV(Voc(vocabulary_path))
     #: File path of predictor in the environment
     environ_path = os.path.join(output_dir, 'RF_cls_ecfp6.pkg')
-    #: file path of hidden states in RNN for initialization
-    initial_path = os.path.join(output_dir, 'net_p.pkg')
-    #: file path of hidden states of optimal exploitation network
-    agent_path = os.path.join(output_dir, 'net_e_%.2f_%.1f_%dx%d' % (epsilon, baseline, batch_size, mc))
-    #: file path of hidden states of exploration network
-    explore_path = os.path.join(output_dir, 'net_p.pkg')
 
     # Environment (predictor)
-    environ = util.Environment(environ_path)
+    des = FileEnvDeserializer(environ_path)
+    environ = des.getModel()
+
     # Agent (generator, exploitation network)
-    agent = model.Generator(voc)
-    agent.load_state_dict(torch.load(initial_path))
+    ser = BasicGenerator.BasicDeserializer(
+        corpus
+        , output_dir
+        , "pr"
+    )
+    exploit = BasicGenerator.load(ser)
 
     # exploration network
-    explore = model.Generator(voc)
-    explore.load_state_dict(torch.load(explore_path))
+    ser = BasicGenerator.BasicDeserializer(
+        corpus
+        , output_dir
+        , "ex"
+    )
+    explore = BasicGenerator.load(ser)
 
-    best_score = 0
-    log_file = open(agent_path + '.log', 'w')
-
-    it = trange(1000)
-    for epoch in it:
-        it.write('\n--------\nEPOCH %d\n--------' % (epoch + 1))
-        it.write('\nForward Policy Gradient Training Generator : ')
-        policy_gradient(agent, environ, explore=explore,
-                        baseline=baseline, batch_size=batch_size, mc=mc, epsilon=epsilon)
-        seqs = agent.sample(1000)
-        ix = util.unique(seqs)
-        smiles, valids = util.check_smiles(seqs[ix], agent.voc)
-        scores = environ(smiles)
-        scores[valids == False] = 0
-        unique = (scores >= 0.5).sum() / 1000
-        # The model with best percentage of unique desired SMILES will be persisted on the hard drive.
-        if best_score < unique:
-            torch.save(agent.state_dict(), agent_path + '.pkg')
-            best_score = unique
-        print("Epoch+: %d average: %.4f valid: %.4f unique: %.4f" % (epoch, scores.mean(), valids.mean(), unique), file=log_file)
-        for i, smile in enumerate(smiles):
-            print('%f\t%s' % (scores[i], smile), file=log_file)
-
-        # Learing rate exponential decay
-        for param_group in agent.optim.param_groups:
-            param_group['lr'] *= (1 - 0.01)
-    log_file.close()
+    policy = PG(batch_size, mc, epsilon, beta=baseline)
+    identifier = 'e_%.2f_%.1f_%dx%d' % (policy.epsilon, policy.beta, policy.batch_size, policy.mc)
+    ser = BasicGenerator.BasicSerializer(output_dir, identifier)
+    agent = BasicDrugExAgent(
+        environ
+        , exploit
+        , policy
+        , ser
+        , explore
+        , n_epochs=1000
+    )
+    agent.train()
 
 
 @click.command()
-@click.option('-d', '--input-directory', type=click.Path(file_okay=False, dir_okay=True), show_default=True)
-@click.option('-o', '--output-directory', type=click.Path(file_okay=False, dir_okay=True), show_default=True)
+@click.option('-d', '--input-directory', type=click.Path(file_okay=False, dir_okay=True), show_default=True, default="data")
+@click.option('-o', '--output-directory', type=click.Path(file_okay=False, dir_okay=True), show_default=True, default="output")
 @click.option('--mc', type=int, default=10, show_default=True)
-@click.option('--batch-size', type=int, default=500, show_default=True)
-@click.option('--num-threads', type=int, default=1, show_default=True)
+@click.option('-s', '--batch-size', type=int, default=512, show_default=True)
+@click.option('-t', '--num-threads', type=int, default=1, show_default=True)
 @click.option('-e', '--epsilon', type=float, default=0.1, show_default=True)
 @click.option('-b', '--baseline', type=float, default=0.1, show_default=True)
-@click.option('-g', '--cuda-visible-devices')
-def main(input_directory, output_directory, mc, batch_size, num_threads, epsilon, baseline, cuda_visible_devices):
+@click.option('-g', '--gpu', type=int, default=0)
+def main(input_directory, output_directory, mc, batch_size, num_threads, epsilon, baseline, gpu):
     rdBase.DisableLog('rdApp.error')
     torch.set_num_threads(num_threads)
-    if cuda_visible_devices:
-        os.environ["CUDA_VISIBLE_DEVICES"] = cuda_visible_devices
+    if gpu:
+        torch.cuda.set_device(gpu)
     _main_helper(
         baseline=baseline,
         batch_size=batch_size,

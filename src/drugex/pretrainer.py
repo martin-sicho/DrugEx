@@ -34,7 +34,7 @@ def _main_helper(*, input_directory, batch_size, epochs_pr, epochs_ex, output_di
     )
     if not os.path.exists(prior.net_pickle_path):
         print('Exploitation network begins to be trained...')
-        prior.train(train_loader_params={
+        prior.pretrain(train_loader_params={
             "batch_size" : batch_size
             , "shuffle" : True
             , "drop_last" : True
@@ -58,7 +58,7 @@ def _main_helper(*, input_directory, batch_size, epochs_pr, epochs_ex, output_di
     explore = BasicGenerator.load(ser)
 
     print('Exploration network begins to be trained...')
-    explore.train(
+    explore.pretrain(
         train_loader_params={
             "batch_size" : batch_size
             , "collate_fn" : util.MolData.collate_fn
