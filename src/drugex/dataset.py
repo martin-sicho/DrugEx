@@ -101,8 +101,8 @@ def main(data_directory, environment_data_file, vocabulary_file):
     zinc_processed = os.path.exists(os.path.join(data_directory, 'zinc_corpus.txt')) \
                  and os.path.exists(os.path.join(data_directory, 'zinc_voc.txt'))
     if os.path.exists(zinc_output_path) and not zinc_processed:
-        corpus = CorpusCSV(vocabulary=Voc(os.path.join(data_directory, vocabulary_file)))
-        corpus.update(zinc_output_path)
+        corpus = CorpusCSV(vocabulary=Voc(os.path.join(data_directory, vocabulary_file)), update_file=zinc_output_path)
+        corpus.update()
         corpus.saveVoc(os.path.join(data_directory, 'zinc_voc.txt'))
         corpus.saveCorpus(os.path.join(data_directory, 'zinc_corpus.txt'))
         click.echo("Done.")
@@ -117,8 +117,8 @@ def main(data_directory, environment_data_file, vocabulary_file):
     chembl_processed = os.path.exists(os.path.join(data_directory, 'chembl_corpus.txt')) \
                  and os.path.exists(os.path.join(data_directory, 'chembl_voc.txt'))
     if os.path.exists(environment_data_file) and not chembl_processed:
-        corpus = CorpusCSV(vocabulary=Voc(os.path.join(data_directory, vocabulary_file)))
-        corpus.update(environment_data_file)
+        corpus = CorpusCSV(vocabulary=Voc(os.path.join(data_directory, vocabulary_file)), update_file=environment_data_file)
+        corpus.update()
         corpus.saveVoc(os.path.join(data_directory, 'chembl_voc.txt'))
         corpus.saveCorpus(os.path.join(data_directory, 'chembl_corpus.txt'))
         click.echo("Done.")

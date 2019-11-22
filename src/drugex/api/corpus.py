@@ -18,11 +18,18 @@ from drugex.util import Voc
 
 class Corpus(ABC):
 
+    class InvalidOperation(Exception):
+        pass
+
     def __init__(self, vocabulary : Voc, data_loader_cls = DataLoader):
         self.voc = vocabulary
         self.words = set(self.voc.chars)
         self.sub_re = re.compile(r'\[\d+')
         self.loader_cls = data_loader_cls
+
+    @abstractmethod
+    def update(self, update_voc=False):
+        pass
 
     @abstractmethod
     def getDataLoader(self, sample_size=None, exclude_sampled=True, loader_params=None):
@@ -57,15 +64,16 @@ class CorpusCSV(Corpus):
         ret.df = pd.read_table(corpus_path) if not n_rows else pd.read_table(corpus_path, nrows=n_rows)
         return ret
 
-    def __init__(self, vocabulary : Voc, data_loader_cls = DataLoader, smiles_column='CANONICAL_SMILES', sep='\t', token="SENT"):
+    def __init__(self, vocabulary : Voc, update_file = None, data_loader_cls = DataLoader, smiles_column='CANONICAL_SMILES', sep='\t', token="SENT"):
         super().__init__(vocabulary=vocabulary, data_loader_cls=data_loader_cls)
         self.smiles_column = smiles_column
         self.token = token
         self.sep = sep
         self.df = pd.DataFrame()
         self.sampled_idx = None
+        self.update_file = update_file
 
-    def update(self, input_file):
+    def update(self, update_voc = False):
         """Constructing the molecular corpus by splitting each SMILES into
         a range of tokens contained in vocabulary.
 
@@ -79,7 +87,7 @@ class CorpusCSV(Corpus):
         self.words = set()
         self.df = pd.DataFrame()
 
-        df = pd.read_table(input_file, sep=self.sep)[self.smiles_column].dropna().drop_duplicates()
+        df = pd.read_table(self.update_file, sep=self.sep)[self.smiles_column].dropna().drop_duplicates()
         smiles = set()
         it = tqdm(df, desc='Reading SMILES')
         for smile in it:
@@ -115,6 +123,10 @@ class CorpusCSV(Corpus):
         self.df[self.token] = tokens
         self.df.drop_duplicates(subset=self.smiles_column)
 
+        # update the voc instance if requested
+        if update_voc:
+            raise NotImplementedError("Voc update is not implemented yet.")
+
     def saveVoc(self, out):
         # persisting the vocabulary on the hard drive.
         with open(out, 'w') as file:
@@ -124,6 +136,9 @@ class CorpusCSV(Corpus):
         self.df.to_csv(out, sep=self.sep, index=None)
 
     def getDataLoader(self, sample_size=None, exclude_sampled=True, loader_params=None):
+        if self.df.empty:
+            raise self.InvalidOperation("Corpus data is empty. Run update before extracting a data loader.")
+
         if self.loader_cls == DataLoader:
             if sample_size is None:
                 sample = self.df.drop(self.sampled_idx) if self.sampled_idx is not None else self.df
@@ -139,4 +154,4 @@ class CorpusCSV(Corpus):
             else:
                 return self.loader_cls(sample)
         else:
-            raise NotImplementedError("Uninplemented data loader requested: {0}".format(self.loader_cls))
+            raise NotImplementedError("Unimplemented data loader requested: {0}".format(self.loader_cls))
