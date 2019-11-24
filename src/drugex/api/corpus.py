@@ -13,7 +13,7 @@ from rdkit import Chem
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 
-from drugex import util
+from drugex import util, VOC_DEFAULT
 from drugex.util import Voc
 
 class Corpus(ABC):
@@ -21,14 +21,22 @@ class Corpus(ABC):
     class InvalidOperation(Exception):
         pass
 
-    def __init__(self, vocabulary : Voc, data_loader_cls = DataLoader):
+    def __init__(self, vocabulary = VOC_DEFAULT):
         self.voc = vocabulary
         self.words = set(self.voc.chars)
+
+class BasicCorpus(Corpus):
+    pass
+
+class DataProvidingCorpus(Corpus):
+
+    def __init__(self, vocabulary = VOC_DEFAULT, data_loader_cls = DataLoader):
+        super().__init__(vocabulary)
         self.sub_re = re.compile(r'\[\d+')
         self.loader_cls = data_loader_cls
 
     @abstractmethod
-    def update(self, update_voc=False):
+    def updateData(self, update_voc=False, sample=None):
         pass
 
     @abstractmethod
@@ -49,22 +57,22 @@ class Corpus(ABC):
 
         pass
 
-class CorpusCSV(Corpus):
+class CorpusCSV(DataProvidingCorpus):
 
     @staticmethod
     def fromFiles(
             corpus_path
-            , vocab_path
+            , vocab_path=None
             , smiles_column='CANONICAL_SMILES'
             , sep='\t'
             , token="SENT"
             , n_rows=None
     ):
-        ret = CorpusCSV(Voc(vocab_path), token=token, smiles_column=smiles_column, sep=sep)
+        ret = CorpusCSV(Voc(vocab_path) if vocab_path else VOC_DEFAULT, token=token, smiles_column=smiles_column, sep=sep)
         ret.df = pd.read_table(corpus_path) if not n_rows else pd.read_table(corpus_path, nrows=n_rows)
         return ret
 
-    def __init__(self, vocabulary : Voc, update_file = None, data_loader_cls = DataLoader, smiles_column='CANONICAL_SMILES', sep='\t', token="SENT"):
+    def __init__(self, update_file : str, vocabulary = VOC_DEFAULT, data_loader_cls = DataLoader, smiles_column='CANONICAL_SMILES', sep='\t', token="SENT"):
         super().__init__(vocabulary=vocabulary, data_loader_cls=data_loader_cls)
         self.smiles_column = smiles_column
         self.token = token
@@ -73,7 +81,7 @@ class CorpusCSV(Corpus):
         self.sampled_idx = None
         self.update_file = update_file
 
-    def update(self, update_voc = False):
+    def updateData(self, update_voc = False, sample=None):
         """Constructing the molecular corpus by splitting each SMILES into
         a range of tokens contained in vocabulary.
 
@@ -88,6 +96,8 @@ class CorpusCSV(Corpus):
         self.df = pd.DataFrame()
 
         df = pd.read_table(self.update_file, sep=self.sep)[self.smiles_column].dropna().drop_duplicates()
+        if sample:
+            df = df.sample(sample)
         smiles = set()
         it = tqdm(df, desc='Reading SMILES')
         for smile in it:

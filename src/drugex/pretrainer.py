@@ -19,9 +19,8 @@ from drugex.api.pretrain.generators import BasicGenerator
 
 def _main_helper(*, input_directory, batch_size, epochs_pr, epochs_ex, output_directory, use_tqdm=False):
     # Construction of the pretrainer corpus
-    voc_file = os.path.join(input_directory, "voc.txt")
     zinc_corpus = os.path.join(input_directory, "zinc_corpus.txt")
-    pre_corpus = CorpusCSV.fromFiles(corpus_path=zinc_corpus, vocab_path=voc_file)
+    pre_corpus = CorpusCSV.fromFiles(corpus_path=zinc_corpus)
 
     # Pre-training the RNN model with ZINC set
     prior = BasicGenerator(
@@ -44,7 +43,7 @@ def _main_helper(*, input_directory, batch_size, epochs_pr, epochs_ex, output_di
 
     # Fine-tuning the RNN model with A2AR set as exploration stragety
     chembl_corpus = os.path.join(input_directory, 'chembl_corpus.txt')
-    ex_corpus = CorpusCSV.fromFiles(corpus_path=chembl_corpus, vocab_path=voc_file)
+    ex_corpus = CorpusCSV.fromFiles(corpus_path=chembl_corpus)
     ser = BasicGenerator.BasicDeserializer(
         ex_corpus
         , out_dir=output_directory
@@ -81,7 +80,7 @@ def _main_helper(*, input_directory, batch_size, epochs_pr, epochs_ex, output_di
 @click.option('-g', '--gpu', type=int, default=0)
 @click.option('--use-tqdm', is_flag=True)
 def main(input_directory, output_directory, batch_size, epochs_pr, epochs_ex, gpu, use_tqdm):
-    if gpu:
+    if gpu and torch.cuda.is_available():
         torch.cuda.set_device(gpu)
     _main_helper(
         input_directory=input_directory,
