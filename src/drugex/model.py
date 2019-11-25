@@ -251,8 +251,9 @@ class Generator(nn.Module):
         hidden_size (int): the neron units of RNN hidden layers.
         is_lstm (bool): is LSTM (True) or GRU (False) used for implementation of RNN architecture
     """
-    def __init__(self, voc, embed_size=128, hidden_size=512, is_lstm=True):
+    def __init__(self, voc, monitor=None, embed_size=128, hidden_size=512, is_lstm=True):
         super(Generator, self).__init__()
+        self.monitors = [monitor] if monitor else []
         self.voc = voc
         self.embed_size = embed_size
         self.hidden_size = hidden_size
@@ -398,7 +399,7 @@ class Generator(nn.Module):
                 if (is_end == 1).all(): break
         return sequences
 
-    def fit(self, loader_train, out_path: str, loader_valid=None, epochs=100, lr=1e-3, *, log_path: str):
+    def fit(self, loader_train, loader_valid=None, epochs=100, lr=1e-3,*, monitor_freq=10):
         """Training the RNN generative model, similar to the scikit-learn or Keras style.
 
         In the end, the optimal value of parameters will also be persisted on the hard drive.
@@ -416,8 +417,9 @@ class Generator(nn.Module):
             lr (float, optional): learning rate (default: 1e-3)
         """
         optimizer = optim.Adam(self.parameters(), lr=lr)
-        log = open(log_path, 'w')
         best_error = np.inf
+        total_epochs = epochs
+        total_steps = len(loader_train)
         for epoch in trange(epochs, desc='Epoch'):
             for i, batch in enumerate(tqdm(loader_train, desc="Batch")):
                 optimizer.zero_grad()
@@ -426,7 +428,8 @@ class Generator(nn.Module):
                 loss_train.backward()
                 optimizer.step()
                 # Performance Evaluation
-                if i % 10 == 0 or loader_valid is not None:
+                current_loss_valid = None
+                if monitor_freq > 0 and i % monitor_freq == 0 or loader_valid is not None:
                     # 1000 SMILES is sampled
                     seqs = self.sample(1000)
                     # ix = util.unique(seqs)
@@ -434,8 +437,11 @@ class Generator(nn.Module):
                     # Checking the validation of each SMILES
                     smiles, valids = util.check_smiles(seqs, self.voc)
                     error = 1 - sum(valids) / len(seqs)
-                    info = "Epoch: %d step: %d error_rate: %.3f loss_train: %.3f" % (epoch, i, error, loss_train.item())
+
+                    current_loss_train = loss_train.item()
+                    current_error_rate = error
                     # Saving the optimal parameter of the model with minimum loss value.
+                    is_best = False
                     if loader_valid is not None:
                         # If the validation set is given, the loss function will be
                         # calculated on the validation set.
@@ -444,23 +450,32 @@ class Generator(nn.Module):
                             size += inner_batch.size(0)
                             with torch.no_grad():
                                 loss_valid += -self.likelihood(inner_batch.to(util.dev)).sum()
-                        print(size)
+
                         loss_valid = loss_valid / size / self.voc.max_len
-                        if loss_valid.item() < best_error:
-                            torch.save(self.state_dict(), out_path)
-                            best_error = loss_valid.item()
-                        info += ' loss_valid: %.3f' % loss_valid.item()
+                        current_loss_valid = loss_valid.item()
+                        if current_loss_valid < best_error:
+                            is_best = True
+                            best_error = current_loss_valid
                     elif error < best_error:
                         # If the validation is not given, the loss function will be
                         # just based on the training set.
-                        torch.save(self.state_dict(), out_path)
+                        is_best = True
                         best_error = error
-                    print(info, file=log)
-                    for j, smile in enumerate(smiles):
-                        print('%d\t%s' % (valids[j], smile), file=log)
-        log.close()
-        self.load_state_dict(torch.load(out_path))
 
+                    # feed monitoring info
+                    for monitor in self.monitors:
+                        monitor.model(self)
+                        monitor.state(self.state_dict(), is_best)
+                        monitor.performance(current_loss_train, current_loss_valid, current_error_rate, best_error)
+                        for j, smile in enumerate(smiles):
+                            monitor.smiles(smile, valids[j])
+                        monitor.finalizeStep(epoch+1, i+1, total_epochs, total_steps)
+
+        for monitor in self.monitors:
+            monitor.close()
+
+    def registerMonitor(self, monitor):
+        self.monitors.append(monitor)
 
 class Discriminator(Base):
     """A highway version of CNN for text classification.

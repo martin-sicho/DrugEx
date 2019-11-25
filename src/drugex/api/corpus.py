@@ -68,7 +68,7 @@ class CorpusCSV(DataProvidingCorpus):
             , token="SENT"
             , n_rows=None
     ):
-        ret = CorpusCSV(Voc(vocab_path) if vocab_path else VOC_DEFAULT, token=token, smiles_column=smiles_column, sep=sep)
+        ret = CorpusCSV(corpus_path, Voc(vocab_path) if vocab_path else VOC_DEFAULT, token=token, smiles_column=smiles_column, sep=sep)
         ret.df = pd.read_table(corpus_path) if not n_rows else pd.read_table(corpus_path, nrows=n_rows)
         return ret
 

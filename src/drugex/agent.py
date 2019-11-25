@@ -17,16 +17,16 @@ from torch.utils.data import DataLoader, TensorDataset
 from tqdm import trange
 
 from drugex import model, util
-from drugex.api.agent.agents import BasicDrugExAgent
+from drugex.api.agent.agents import DrugExAgent
+from drugex.api.agent.callbacks import BasicAgentMonitor
 from drugex.api.agent.policy import PolicyGradient
-from drugex.api.corpus import CorpusCSV
 from drugex.api.environ.models import FileEnvDeserializer, Environ
-from drugex.api.pretrain.generators import BasicGenerator, Generator
-from drugex.util import Voc
+from drugex.api.model.callbacks import BasicMonitor
+from drugex.api.pretrain.generators import BasicGenerator, PolicyAwareGenerator
 
 class PG(PolicyGradient):
 
-    def __call__(self, environ: Environ, exploit: Generator, explore=None):
+    def __call__(self, environ: Environ, exploit: PolicyAwareGenerator, explore=None):
         """Training generator under reinforcement learning framework,
         The rewoard is only the final reward given by environment (predictor).
 
@@ -102,8 +102,6 @@ def rollout_pg(agent, environ, explore=None, *, batch_size, baseline, mc, epsilo
 
 
 def _main_helper(*, epsilon, baseline, batch_size, mc, vocabulary_path, output_dir):
-    #: Vocabulary containing all of the tokens for SMILES construction
-    corpus = CorpusCSV(Voc(vocabulary_path))
     #: File path of predictor in the environment
     environ_path = os.path.join(output_dir, 'RF_cls_ecfp6.pkg')
 
@@ -112,31 +110,23 @@ def _main_helper(*, epsilon, baseline, batch_size, mc, vocabulary_path, output_d
     environ = des.getModel()
 
     # Agent (generator, exploitation network)
-    ser = BasicGenerator.BasicDeserializer(
-        corpus
-        , output_dir
-        , "pr"
-    )
-    exploit = BasicGenerator.load(ser)
+    exploit_monitor = BasicMonitor(output_dir, "pr")
+    exploit = BasicGenerator(initial_state=exploit_monitor)
 
     # exploration network
-    ser = BasicGenerator.BasicDeserializer(
-        corpus
-        , output_dir
-        , "ex"
-    )
-    explore = BasicGenerator.load(ser)
+    explore_monitor = BasicMonitor(output_dir, "ex")
+    explore = BasicGenerator(initial_state=explore_monitor)
 
     policy = PG(batch_size, mc, epsilon, beta=baseline)
     identifier = 'e_%.2f_%.1f_%dx%d' % (policy.epsilon, policy.beta, policy.batch_size, policy.mc)
-    ser = BasicGenerator.BasicSerializer(output_dir, identifier)
-    agent = BasicDrugExAgent(
-        environ
+    agent_monitor = BasicAgentMonitor(output_dir, identifier)
+    agent = DrugExAgent(
+        agent_monitor
+        , environ
         , exploit
         , policy
-        , ser
         , explore
-        , n_epochs=1000
+        , {"n_epochs" : 1000}
     )
     agent.train()
 
@@ -153,7 +143,7 @@ def _main_helper(*, epsilon, baseline, batch_size, mc, vocabulary_path, output_d
 def main(input_directory, output_directory, mc, batch_size, num_threads, epsilon, baseline, gpu):
     rdBase.DisableLog('rdApp.error')
     torch.set_num_threads(num_threads)
-    if gpu:
+    if torch.cuda.is_available() and gpu:
         torch.cuda.set_device(gpu)
     _main_helper(
         baseline=baseline,

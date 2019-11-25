@@ -14,6 +14,7 @@ import click
 
 from drugex import util
 from drugex.api.corpus import CorpusCSV
+from drugex.api.model.callbacks import BasicMonitor
 from drugex.api.pretrain.generators import BasicGenerator
 
 
@@ -23,15 +24,15 @@ def _main_helper(*, input_directory, batch_size, epochs_pr, epochs_ex, output_di
     pre_corpus = CorpusCSV.fromFiles(corpus_path=zinc_corpus)
 
     # Pre-training the RNN model with ZINC set
+    pr_logger = BasicMonitor(out_dir=output_directory, identifier="pr")
     prior = BasicGenerator(
-        pre_corpus
-        , out_dir=output_directory
-        , out_identifier="pr"
+        monitor=pr_logger
+        , corpus=pre_corpus
         , train_params={
             "epochs" : epochs_pr
         }
     )
-    if not os.path.exists(prior.net_pickle_path):
+    if not pr_logger.best_state:
         print('Exploitation network begins to be trained...')
         prior.pretrain(train_loader_params={
             "batch_size" : batch_size
@@ -44,18 +45,15 @@ def _main_helper(*, input_directory, batch_size, epochs_pr, epochs_ex, output_di
     # Fine-tuning the RNN model with A2AR set as exploration stragety
     chembl_corpus = os.path.join(input_directory, 'chembl_corpus.txt')
     ex_corpus = CorpusCSV.fromFiles(corpus_path=chembl_corpus)
-    ser = BasicGenerator.BasicDeserializer(
-        ex_corpus
-        , out_dir=output_directory
-        , in_dir=output_directory
-        , in_identifier="pr"
-        , out_identifier="ex"
+    ex_logger = BasicMonitor(out_dir=output_directory, identifier="ex")
+    explore = BasicGenerator(
+        monitor=ex_logger
+        , corpus=ex_corpus
+        , initial_state=pr_logger
         , train_params={
             "epochs" : epochs_ex
         }
     )
-    explore = BasicGenerator.load(ser)
-
     print('Exploration network begins to be trained...')
     explore.pretrain(
         train_loader_params={
