@@ -9,7 +9,7 @@ import torch as T
 from rdkit import rdBase
 from torch.utils.data import DataLoader, TensorDataset
 
-from drugex import model, util
+from drugex.core import model, util
 
 rdBase.DisableLog('rdApp.error')
 T.set_num_threads(1)

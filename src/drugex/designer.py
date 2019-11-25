@@ -9,8 +9,8 @@ import click
 import pandas as pd
 import torch
 
-from drugex import model, util
-from drugex.util import Voc
+from drugex.core import model, util
+from drugex.core.util import Voc
 
 
 def generate(agent_path, out, *, voc: Voc, num=10000, batch_size=500, environment_path='output/RF_cls_ecfp6.pkg'):

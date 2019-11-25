@@ -15,7 +15,7 @@ from tqdm import trange, tqdm
 from torch import nn, optim
 from torch.nn import functional as F
 
-from drugex import util
+from drugex.core import util
 
 
 class Base(nn.Module):
@@ -421,7 +421,7 @@ class Generator(nn.Module):
         total_epochs = epochs
         total_steps = len(loader_train)
         for epoch in trange(epochs, desc='Epoch'):
-            for i, batch in enumerate(tqdm(loader_train, desc="Batch")):
+            for i, batch in enumerate(loader_train):
                 optimizer.zero_grad()
                 loss_train = self.likelihood(batch.to(util.dev))
                 loss_train = -loss_train.mean()

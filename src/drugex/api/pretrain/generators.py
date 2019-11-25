@@ -10,7 +10,7 @@ from abc import abstractmethod
 
 from torch import Tensor
 
-from drugex import model, util
+from drugex.core import model, util
 from drugex.api.corpus import Corpus, BasicCorpus
 from drugex.api.pretrain.serialization import GeneratorDeserializer, StateProvider, GeneratorSerializer
 
@@ -69,13 +69,13 @@ class BasicGenerator(PretrainableGenerator, PolicyAwareGenerator):
         self.monitor = monitor
 
     def setState(self, state : StateProvider):
-        print("Loading initial state dictionary...")
+        print("Loading initial state...")
         print("State provider:", state.__class__)
         self.model.load_state_dict(state.getState())
         print("Done")
 
     def getState(self):
-        return self.monitor.getState()
+        return self.model.state_dict()
 
     def pretrain(self, train_loader_params, validation_size=0, valid_loader_params=None):
         if hasattr(self.corpus, "getDataLoader"):

@@ -12,7 +12,7 @@ import os
 
 import click
 
-from drugex import util
+from drugex.core import util
 from drugex.api.corpus import CorpusCSV
 from drugex.api.model.callbacks import BasicMonitor
 from drugex.api.pretrain.generators import BasicGenerator

@@ -19,7 +19,7 @@ from rdkit import Chem
 from tqdm import tqdm
 
 from drugex.api.corpus import CorpusCSV
-from drugex.util import Voc
+from drugex.core.util import Voc
 
 
 def ZINC(folder: str, out: str):

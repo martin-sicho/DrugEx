@@ -13,7 +13,7 @@ from sklearn.manifold import TSNE
 from sklearn.preprocessing import StandardScaler as Scaler
 from tqdm import tqdm
 
-from drugex import util
+from drugex.core import util
 
 
 def converage(fnames):

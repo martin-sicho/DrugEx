@@ -13,8 +13,9 @@ from rdkit import Chem
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 
-from drugex import util, VOC_DEFAULT
-from drugex.util import Voc
+from drugex import VOC_DEFAULT
+from drugex.core import util
+from drugex.core.util import Voc
 
 class Corpus(ABC):
 
