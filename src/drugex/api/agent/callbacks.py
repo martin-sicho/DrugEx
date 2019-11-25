@@ -27,10 +27,6 @@ class AgentMonitor(GeneratorModelCallback, StateProvider):
     def performance(self, scores, valids, criterion, best_score):
         pass
 
-    @abstractmethod
-    def close(self):
-        pass
-
 class BasicAgentMonitor(AgentMonitor):
 
     def __init__(self, out_dir : str, identifier : str):
@@ -39,6 +35,8 @@ class BasicAgentMonitor(AgentMonitor):
         self.log_file = open(os.path.join(self.out_dir, 'net_' + self.identifier + '.log'), 'w')
         self.net_pickle_path = os.path.join(self.out_dir, 'net_' + self.identifier + '.pkg')
         self.best_state = None
+        if os.path.exists(self.net_pickle_path):
+            self.best_state = torch.load(self.net_pickle_path)
         self.mean_scores = []
         self.mean_valids = []
         self.criterions = []

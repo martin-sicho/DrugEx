@@ -19,7 +19,7 @@
 drugex dataset -d ./data/ -e A2AR_raw.txt
 drugex environ -a RF
 drugex pretrainer -b 512 -p 300 -e 400
-python agent.py -e 0.01 -b 0.1
+drugex agent.py -e 0.01 -b 0.1
 
 # use the trained model to sample 1000 molecules
-python designer.py -i 'output/net_e_0.01_0.1_500x10.pkg' -n 1000
+drugex designer -a e_0.01_0.1_512x10 -e output/RF_cls_ecfp6.pkg -o output/ -n 10000

@@ -13,9 +13,10 @@ from drugex.api.agent.callbacks import AgentMonitor
 from drugex.api.agent.policy import PolicyGradient
 from drugex.api.environ.models import Environ
 from drugex.api.pretrain.generators import Generator
+from drugex.api.pretrain.serialization import StateProvider
 
 
-class Agent(ABC):
+class AgentTrainer(StateProvider):
 
     class UntrainedException(Exception):
         pass
@@ -39,18 +40,26 @@ class Agent(ABC):
     def sample(self, n_samples):
         pass
 
-class DrugExAgent(Agent):
+    @abstractmethod
+    def getAgent(self):
+        pass
+
+class DrugExAgentTrainer(AgentTrainer):
 
     def __init__(self, monitor : AgentMonitor, environ: Environ, exploit: Generator, policy: PolicyGradient, explore=None, train_params=None):
         super().__init__(monitor, environ, exploit, policy, explore, train_params=train_params)
         self.best_state = None
 
+    def getState(self):
+        return self.best_state
+
+    def getAgent(self):
+        self.exploit.setState(self.best_state)
+        return self.exploit
+
     def train(self):
         best_score = 0
-        it = trange(self.n_epochs)
-        for epoch in it:
-            it.write('\n--------\nEPOCH %d\n--------' % (epoch + 1))
-            it.write('\nForward Policy Gradient Training Generator : ')
+        for epoch in trange(self.n_epochs, desc="Epoch"):
             self.policy(self.environ, self.exploit, explore=self.explore)
             self.monitor.model(self.exploit.model)
 
@@ -73,7 +82,7 @@ class DrugExAgent(Agent):
                 self.monitor.smiles(smile, scores[i])
 
             # monitor state
-            self.monitor.state(self.exploit, is_best)
+            self.monitor.state(self.exploit.getState(), is_best)
 
             # Learning rate exponential decay
             for param_group in self.exploit.model.optim.param_groups:
@@ -83,7 +92,7 @@ class DrugExAgent(Agent):
             self.monitor.finalizeEpoch(epoch, self.n_epochs)
 
         self.monitor.close()
-        self.exploit.setState(self.monitor.getState())
+        self.exploit.setState(self.best_state)
 
     def sample(self, n_samples):
         if self.best_state:

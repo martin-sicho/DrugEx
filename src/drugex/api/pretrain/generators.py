@@ -69,10 +69,14 @@ class BasicGenerator(PretrainableGenerator, PolicyAwareGenerator):
         self.monitor = monitor
 
     def setState(self, state : StateProvider):
-        print("Loading initial state...")
-        print("State provider:", state.__class__)
-        self.model.load_state_dict(state.getState())
-        print("Done")
+        state_ = state.getState()
+        if state:
+            print("Loading initial state...")
+            print("State provider:", state.__class__)
+            self.model.load_state_dict(state_)
+            print("Done")
+        else:
+            raise Exception("Empty state was provided.") # TODO: make this a custom exception
 
     def getState(self):
         return self.model.state_dict()
