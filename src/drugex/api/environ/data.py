@@ -37,9 +37,9 @@ class EnvironData(ABC):
 
 class ChEMBLCSV(EnvironData):
 
-    def __init__(self, input_file : str, activity_threshold=None, subsample_size=None):
-        super().__init__(subsample_size=subsample_size)
-        self.PAIR = ['CMPD_CHEMBLID', 'CANONICAL_SMILES', 'PCHEMBL_VALUE', 'ACTIVITY_COMMENT']
+    def __init__(self, input_file : str, activity_threshold=None, subsample_size=None, id_col='CMPD_CHEMBLID', is_regression=False):
+        super().__init__(subsample_size=subsample_size, is_regression=is_regression)
+        self.PAIR = [id_col, 'CANONICAL_SMILES', 'PCHEMBL_VALUE', 'ACTIVITY_COMMENT']
         self.activity_threshold = activity_threshold
         if self.activity_threshold is not None:
             self.is_regression = False
