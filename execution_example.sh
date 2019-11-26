@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
 # The goal of this bash script is to illustrate
-# how to run the aforementioned scripts to obtain an optimal
+# how to use the command line interface to obtain an optimal
 # generative model based on the information from
 # the DrugEx paper (https://jcheminf.biomedcentral.com/articles/10.1186/s13321-019-0355-6).
 #
@@ -22,4 +22,4 @@ drugex pretrainer -b 512 -p 300 -e 400
 drugex agent.py -e 0.01 -b 0.1
 
 # use the trained model to sample 1000 molecules
-drugex designer -a e_0.01_0.1_512x10 -e output/RF_cls_ecfp6.pkg -o output/ -n 10000
+designer -a e_0.01_0.1_512x10 -e output/RF_cls_ecfp6.pkg -o output/ -n 10000

@@ -103,9 +103,40 @@ by running:
     network will be involved in the SMILES generation, and the exploration rate 
     controls the contribution that exploration network makes. Run with:
     `drugex agent -d data/ -o output/`
-5. `python -m drugex.designer`:
+5. `drugex designer`:
     Finally, generating the SMILES format molecules with well-trained RNN model
     (pre-trained/fine-tuned model or DrugEx model).
+    
+Here is an example bash script that will recreate one of the DrugEx models 
+according to the published paper [1]:
+
+```bash
+#!/usr/bin/env bash
+
+# The goal of this bash script is to illustrate
+# how to use the command line interface to obtain an optimal
+# generative model based on the information from
+# the DrugEx paper (https://jcheminf.biomedcentral.com/articles/10.1186/s13321-019-0355-6).
+#
+# That is:
+#
+# - RF classifier as reward in RL
+# - 300 epochs for the pre-trained (exploitation) network
+#   and 400 for the fine-tuned (exploration) network (Fig. 5)
+# - 200 epochs during the RL training (Fig. 8) with
+#   the fine-tuned network as exploration strategy (Gφ),
+#   ε = 0.01 and β = 0.1 (based on Table 1)
+# - batch size of 512 for all networks built
+
+# data assembly and training
+drugex dataset -d ./data/ -e A2AR_raw.txt
+drugex environ -a RF
+drugex pretrainer -b 512 -p 300 -e 400
+drugex agent.py -e 0.01 -b 0.1
+
+# use the trained model to sample 1000 molecules
+designer -a e_0.01_0.1_512x10 -e output/RF_cls_ecfp6.pkg -o output/ -n 10000
+```
         
 In addition, this toolkit also provides some other scripts for definition of
 special data structures, model architectures and coefficient measurements, etc.
@@ -128,7 +159,7 @@ special data structures, model architectures and coefficient measurements, etc.
 
 References
 ==========
-Liu, Xuhan; Ye, Kai; Van Vlijmen, Herman; IJzerman, Adriaan P.; Van westen, Gerard JP (2018): An Exploration Strategy Improves the Diversity of de novo Ligands Using Deep Reinforcement Learning – A Case for the Adenosine A2A Receptor. ChemRxiv. Preprint.
+[1] Liu, Xuhan; Ye, Kai; Van Vlijmen, Herman; IJzerman, Adriaan P.; Van westen, Gerard JP (2018): An Exploration Strategy Improves the Diversity of de novo Ligands Using Deep Reinforcement Learning – A Case for the Adenosine A2A Receptor. ChemRxiv. Preprint.
 https://doi.org/10.26434/chemrxiv.7436789.v2
 
 Acknowledgement
