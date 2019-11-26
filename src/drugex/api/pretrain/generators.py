@@ -50,7 +50,7 @@ class PretrainableGenerator(Generator):
             self.model.registerMonitor(monitor)
 
     @abstractmethod
-    def pretrain(self, train_loader_params, validation_size=0, valid_loader_params=None):
+    def pretrain(self, train_loader_params=None, validation_size=0, valid_loader_params=None):
         pass
 
 class PolicyAwareGenerator(Generator):
@@ -81,7 +81,7 @@ class BasicGenerator(PretrainableGenerator, PolicyAwareGenerator):
     def getState(self):
         return self.model.state_dict()
 
-    def pretrain(self, train_loader_params, validation_size=0, valid_loader_params=None):
+    def pretrain(self, train_loader_params=None, validation_size=0, valid_loader_params=None):
         if hasattr(self.corpus, "getDataLoader"):
             if validation_size > 0:
                 valid_loader = self.corpus.getDataLoader(
