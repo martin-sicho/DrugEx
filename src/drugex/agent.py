@@ -21,11 +21,8 @@ from drugex.api.model.callbacks import BasicMonitor
 from drugex.api.pretrain.generators import BasicGenerator
 
 def _main_helper(*, epsilon, baseline, batch_size, mc, vocabulary_path, output_dir):
-    #: File path of predictor in the environment
-    environ_path = os.path.join(output_dir, 'RF_cls_ecfp6.pkg')
-
     # Environment (predictor)
-    des = FileEnvDeserializer(environ_path)
+    des = FileEnvDeserializer(output_dir, 'RF_cls_ecfp6')
     environ = des.getModel()
 
     # Agent (generator, exploitation network)
