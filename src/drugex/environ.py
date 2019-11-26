@@ -248,7 +248,7 @@ def _main_helper(*, path, feat, alg, is_regression, batch_size, n_epoch, lr, out
 
     # Model training and saving with RF
     # TODO: unify all algorithms under this interface
-    data_chembl = ChEMBLCSV(path, 6.5, subsample_size=500)
+    data_chembl = ChEMBLCSV(path, 6.5)
     if alg == "RF":
         model = RF(train_provider=data_chembl, test_provider=data_chembl)
         model.fit()
