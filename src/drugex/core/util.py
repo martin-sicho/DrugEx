@@ -32,13 +32,13 @@ class Voc(object):
     Arguments:
         path (str): the path of vocabulary file that contains all of the tokens split by '\n'
     """
-    def __init__(self, path, max_len=100):
-        self.chars = ['EOS', 'GO']
+    def __init__(self, path=None, chars=tuple(), max_len=100):
+        self.chars = set(['EOS', 'GO'] + list(chars))
         if path is not None and os.path.exists(path):
             f = open(path, 'r')
-            chars = f.read().split()
-            assert len(set(chars)) == len(chars)
-            self.chars += chars
+            file_chars = f.read().split()
+            assert len(set(file_chars)) == len(file_chars) # TODO: replace with Exception
+            self.chars.update(set(file_chars))
         self.size = len(self.chars)
         # dict -> {token: index} for encoding
         self.tk2ix = dict(zip(self.chars, range(len(self.chars))))
