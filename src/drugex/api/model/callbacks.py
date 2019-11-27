@@ -80,7 +80,7 @@ class BasicMonitor(PretrainingMonitor):
         self.net_log_path = os.path.join(self.out_dir, 'net_{0}.log'.format(self.identifier))
         if hasattr(self, "log"):
             self.log.close()
-        self.log = open(self.net_log_path, 'w')
+        self.log = open(self.net_log_path, 'a' if self.best_state else 'w')
 
     def finalizeStep(self, current_epoch: int, current_step: int, total_epochs: int, total_steps: int):
         self.info.append("Epoch: %d step: %d error_rate: %.3f loss_train: %.3f loss_valid %.3f" % (current_epoch, current_step, self.error_rate[-1], self.loss_train[-1], self.loss_valid[-1] if self.loss_valid[-1] is not None else np.inf))
