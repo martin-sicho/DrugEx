@@ -37,6 +37,7 @@ class CorpusChEMBL(DataProvidingCorpus):
 
     def __init__(self
                  , gene_names : list
+                 , clean_raw=False
                  , smiles_field="CANONICAL_SMILES"
                  , extracted_fields=(
                     "MOLECULE_CHEMBL_ID"
@@ -45,20 +46,20 @@ class CorpusChEMBL(DataProvidingCorpus):
                     , "ACTIVITY_COMMENT"
                     )
                  ):
-        super().__init__()
+        super().__init__(smiles_col=smiles_field)
         self.gene_names = gene_names
         self.extracted_fields = extracted_fields
-        self.smiles_field=smiles_field
         self.CHEMBL_TARGETS = new_client.target
         self.CHEMBL_COMPOUNDS = new_client.molecule
         self.CHEMBL_ACTIVITIES = new_client.activity
         self.raw_data = pd.DataFrame()
+        self.clean_raw = clean_raw
 
     def _cleanRaw(self):
         subset = set(self.extracted_fields)
         subset.discard("ACTIVITY_COMMENT")
         self.raw_data = self.raw_data.dropna(subset=subset)
-        for i, row in self.df.iterrows():
+        for i, row in self.raw_data.iterrows():
             # replacing the nitrogen electrical group to nitrogen atom "N"
             smile = row['CANONICAL_SMILES'].replace('[NH+]', 'N').replace('[NH2+]', 'N').replace('[NH3+]', 'N')
             # removing the radioactivity of each atom
@@ -69,11 +70,10 @@ class CorpusChEMBL(DataProvidingCorpus):
                 ix = np.argmax([len(frag) for frag in frags])
                 smile = frags[ix]
             # Transforming into canonical SMILES based on the Rdkit built-in algorithm.
-            self.df.loc[i, 'CANONICAL_SMILES'] = Chem.CanonSmiles(smile, 0)
+            self.raw_data.loc[i, 'CANONICAL_SMILES'] = Chem.CanonSmiles(smile, 0)
             # removing molecule contained metal atom
             if '[Au]' in smile or '[As]' in smile or '[Hg]' in smile or '[Se]' in smile or smile.count('C') + smile.count('c') < 2:
-                self.df = self.df.drop(i)
-        self.raw_data = self.df
+                self.raw_data = self.raw_data.drop(i)
 
     def updateData(self, update_voc=False, sample=None):
         self.words = set()
@@ -101,19 +101,12 @@ class CorpusChEMBL(DataProvidingCorpus):
             self.raw_data = self.raw_data.append(pd.DataFrame(compound_data))
 
         # cleanup the raw data in this instance
-        self._cleanRaw()
+        if self.clean_raw:
+            self._cleanRaw()
 
-        tokens, canons, self.words = self.fromDataFrame(self.raw_data, self.voc, self.smiles_field, sample)
+        tokens, canons, self.words = self.fromDataFrame(self.raw_data, self.voc, self.smiles_column, sample)
 
-        # saving the canonical smiles and token sentences as a basis for future transformations
-        self.df = pd.DataFrame()
-        self.df[self.smiles_field] = canons
-        self.df[self.token] = tokens
-        self.df.drop_duplicates(subset=self.smiles_field, inplace=True)
-
-        # rewrite the current voc instance if requested
-        if update_voc:
-            self.voc = Voc(chars=self.words)
+        self.resetDF(canons, tokens, update_voc)
 
         return self.df, self.voc
 
@@ -173,9 +166,9 @@ def data():
     # and pulls all compounds that have activity data available.
     corpus_out_chembl = os.path.join(OUT_DIR, "chembl_corpus.txt")
     vocab_out_chembl = os.path.join(OUT_DIR, "chembl_voc.txt")
-    raw_data_path = os.path.join(OUT_DIR, "ADORA2A.txt")
+    env_data_path = os.path.join(OUT_DIR, "ADORA2A.txt")
     if not os.path.exists(corpus_out_chembl):
-        corpus_ex = CorpusChEMBL(["ADORA2A"])
+        corpus_ex = CorpusChEMBL(["ADORA2A"], clean_raw=False)
 
         # lets update this corpus and save the results
         # (same procedure as above)
@@ -184,7 +177,7 @@ def data():
         corpus_ex.saveVoc(vocab_out_chembl)
 
         # in addition we will also save the raw downloaded data
-        corpus_ex.raw_data.to_csv(raw_data_path, sep="\t", index=False)
+        corpus_ex.raw_data.to_csv(env_data_path, sep="\t", index=False)
     else:
         # If we already generated the corpus file,
         # we can load it using the CorpusCSV class
@@ -205,7 +198,7 @@ def data():
     # train the model which will provide the activity
     # values for policy gradient.
     # Luckily, we already have the file to do this:
-    environ_data = ChEMBLCSV(raw_data_path, 6.5, id_col='MOLECULE_CHEMBL_ID')
+    environ_data = ChEMBLCSV(env_data_path, 6.5, id_col='MOLECULE_CHEMBL_ID') # or CMPD_CHEMBLID
     # This class not only loads the activity data,
     # but also provides access to it to the
     # QSAR learning algorithms (as we will see later).
@@ -272,7 +265,7 @@ def main():
             , train_params={
                 # these parameters are fed directly to the
                 # fit method of the underlying pytorch model
-                "epochs" : 3 # lets just make this one quick
+                "epochs" : 30 # lets just make this one quick
             }
         )
         pretrained.pretrain()
@@ -314,7 +307,7 @@ def main():
             , initial_state=pr_monitor
             , corpus=corpus_ex # We use the target-specific corpus instead.
             , train_params={
-                "epochs" : 3 # We will make this one quick too.
+                "epochs" : 30 # We will make this one quick too.
             }
         )
         exploration.pretrain(validation_size=512)
@@ -352,7 +345,7 @@ def main():
             , pretrained # the pretrained model
             , policy # our policy gradient implemntation
             , exploration # the fine-tuned model
-            , {"n_epochs" : 3}
+            , {"n_epochs" : 30}
         )
         agent.train()
     else:

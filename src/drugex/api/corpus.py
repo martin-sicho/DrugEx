@@ -25,16 +25,7 @@ class Corpus(ABC):
     def __init__(self, vocabulary = VOC_DEFAULT):
         self.voc = vocabulary
         self.words = set(self.voc.chars)
-        self.df = pd.DataFrame()
         self.sep = "\t"
-
-    def saveVoc(self, out):
-        # persisting the vocabulary on the hard drive.
-        with open(out, 'w') as file:
-            file.write('\n'.join(sorted(self.words)))
-
-    def saveCorpus(self, out):
-        self.df.to_csv(out, sep=self.sep, index=None)
 
 class BasicCorpus(Corpus):
     pass
@@ -43,14 +34,24 @@ class DataProvidingCorpus(Corpus):
 
     SUB_RE = re.compile(r'\[\d+')
 
-    def __init__(self, vocabulary = VOC_DEFAULT, token="SENT"):
+    def __init__(self, vocabulary = VOC_DEFAULT, token="SENT", smiles_col="CANONICAL_SMILES"):
         super().__init__(vocabulary)
         self.token = token
         self.sampled_idx = None
+        self.df = pd.DataFrame()
+        self.smiles_column = smiles_col
 
     @abstractmethod
     def updateData(self, update_voc=False, sample=None):
         pass
+
+    def saveVoc(self, out):
+        # persisting the vocabulary on the hard drive.
+        with open(out, 'w') as file:
+            file.write('\n'.join(sorted(self.words)))
+
+    def saveCorpus(self, out):
+        self.df.to_csv(out, sep=self.sep, index=None)
 
     def getDataLoader(self, sample_size=None, exclude_sampled=True, loader_params=None):
         """
@@ -91,6 +92,18 @@ class DataProvidingCorpus(Corpus):
             return DataLoader(sample, **loader_params)
         else:
             return DataLoader(sample)
+
+    def resetDF(self, canons, tokens, update_voc):
+        self.df = pd.DataFrame()
+
+        # saving the canonical smiles and token sentences as a basis for future transformations
+        self.df[self.smiles_column] = canons
+        self.df[self.token] = tokens
+        self.df.drop_duplicates(subset=self.smiles_column, inplace=True)
+
+        # rewrite the current voc instance if requested
+        if update_voc:
+            self.voc = Voc(chars=self.words)
 
     @staticmethod
     def fromDataFrame(df, voc, smiles_column, sample=None):
@@ -148,10 +161,8 @@ class CorpusCSV(DataProvidingCorpus):
         return ret
 
     def __init__(self, update_file : str, vocabulary = VOC_DEFAULT, smiles_column='CANONICAL_SMILES', sep='\t', token="SENT"):
-        super().__init__(vocabulary, token)
-        self.smiles_column = smiles_column
+        super().__init__(vocabulary, token, smiles_col=smiles_column)
         self.sep = sep
-        self.df = pd.DataFrame()
         self.update_file = update_file
 
     def updateData(self, update_voc = False, sample=None):
@@ -164,18 +175,10 @@ class CorpusCSV(DataProvidingCorpus):
                 and output table (including CANONICAL_SMILES and whitespace delimited token sentence)
         """
         self.words = set()
-        self.df = pd.DataFrame()
 
         df = pd.read_table(self.update_file, sep=self.sep)
         tokens, canons, self.words = self.fromDataFrame(df, self.voc, self.smiles_column, sample=sample)
 
-        # saving the canonical smiles and token sentences as a basis for future transformations
-        self.df[self.smiles_column] = canons
-        self.df[self.token] = tokens
-        self.df.drop_duplicates(subset=self.smiles_column, inplace=True)
-
-        # rewrite the current voc instance if requested
-        if update_voc:
-            self.voc = Voc(chars=self.words)
+        self.resetDF(canons, tokens, update_voc)
 
         return self.df, self.voc
