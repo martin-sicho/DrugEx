@@ -13,7 +13,7 @@ import click
 import torch
 from rdkit import rdBase
 
-from drugex.api.agent.agents import DrugExAgentTrainer
+from drugex.api.agent.agents import DrugExAgent
 from drugex.api.agent.callbacks import BasicAgentMonitor
 from drugex.api.agent.policy import PG
 from drugex.api.environ.serialization import FileEnvDeserializer
@@ -36,7 +36,7 @@ def _main_helper(*, epsilon, baseline, batch_size, mc, vocabulary_path, output_d
     policy = PG(batch_size, mc, epsilon, beta=baseline)
     identifier = 'e_%.2f_%.1f_%dx%d' % (policy.epsilon, policy.beta, policy.batch_size, policy.mc)
     agent_monitor = BasicAgentMonitor(output_dir, identifier)
-    agent = DrugExAgentTrainer(
+    agent = DrugExAgent(
         agent_monitor
         , environ
         , exploit

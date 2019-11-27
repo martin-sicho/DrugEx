@@ -15,7 +15,7 @@ from drugex.api.pretrain.generators import Generator
 from drugex.api.pretrain.serialization import StateProvider
 
 
-class AgentTrainer(StateProvider):
+class Agent(StateProvider):
 
     class UntrainedException(Exception):
         pass
@@ -43,7 +43,7 @@ class AgentTrainer(StateProvider):
     def getAgent(self):
         pass
 
-class DrugExAgentTrainer(AgentTrainer):
+class DrugExAgent(Agent):
 
     def __init__(self, monitor : AgentMonitor, environ: Environ, exploit: Generator, policy: PolicyGradient, explore=None, train_params=None):
         super().__init__(monitor, environ, exploit, policy, explore, train_params=train_params)

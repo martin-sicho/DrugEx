@@ -8,7 +8,7 @@ On: 26-11-19, 10:46
 import os
 
 import drugex
-from drugex.api.agent.agents import DrugExAgentTrainer
+from drugex.api.agent.agents import DrugExAgent
 from drugex.api.agent.callbacks import BasicAgentMonitor
 from drugex.api.agent.policy import PG
 from drugex.api.corpus import CorpusCSV, BasicCorpus, CorpusChEMBL
@@ -250,7 +250,7 @@ def main():
     # Finally, the DrugEx agent itself:
     if not agent_monitor.getState():
         print("Training DrugEx agent...")
-        agent = DrugExAgentTrainer(
+        agent = DrugExAgent(
             agent_monitor # our monitor
             , environ_model # environment for the policy gradient
             , pretrained # the pretrained model
