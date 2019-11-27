@@ -13,7 +13,6 @@ from rdkit import Chem
 from tqdm import tqdm
 
 import drugex
-from drugex import Voc
 from drugex.api.agent.agents import DrugExAgentTrainer
 from drugex.api.agent.callbacks import BasicAgentMonitor
 from drugex.api.agent.policy import PG
@@ -74,6 +73,7 @@ class CorpusChEMBL(DataProvidingCorpus):
             # removing molecule contained metal atom
             if '[Au]' in smile or '[As]' in smile or '[Hg]' in smile or '[Se]' in smile or smile.count('C') + smile.count('c') < 2:
                 self.raw_data = self.raw_data.drop(i)
+        self.raw_data = self.raw_data.sample(frac=1)
 
     def updateData(self, update_voc=False, sample=None):
         self.words = set()
@@ -168,7 +168,7 @@ def data():
     vocab_out_chembl = os.path.join(OUT_DIR, "chembl_voc.txt")
     env_data_path = os.path.join(OUT_DIR, "ADORA2A.txt")
     if not os.path.exists(corpus_out_chembl):
-        corpus_ex = CorpusChEMBL(["ADORA2A"], clean_raw=False)
+        corpus_ex = CorpusChEMBL(["ADORA2A"], clean_raw=True)
 
         # lets update this corpus and save the results
         # (same procedure as above)
@@ -235,6 +235,7 @@ def main():
     # the "easiest" part comes first
     # the environment model for policy gradient
     environ_model = environ(environ_data)
+    return
 
     # Now we can pretrain our exploitation network.
     # This takes a long time and is a quite complex
