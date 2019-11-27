@@ -6,20 +6,12 @@ Created by: Martin Sicho
 On: 26-11-19, 10:46
 """
 import os
-import re
-
-import numpy as np
-from rdkit import Chem
-from tqdm import tqdm
 
 import drugex
 from drugex.api.agent.agents import DrugExAgentTrainer
 from drugex.api.agent.callbacks import BasicAgentMonitor
 from drugex.api.agent.policy import PG
-from drugex.api.corpus import CorpusCSV, DataProvidingCorpus, BasicCorpus
-
-from chembl_webresource_client.new_client import new_client
-import pandas as pd
+from drugex.api.corpus import CorpusCSV, BasicCorpus, CorpusChEMBL
 
 from drugex.api.designer.designers import BasicDesigner, CSVConsumer
 from drugex.api.environ.data import ChEMBLCSV
@@ -31,85 +23,6 @@ from drugex.api.pretrain.generators import BasicGenerator
 DATA_DIR="data" # folder with input data files
 OUT_DIR="output/workflow_out" # folder to store the output of this workflow
 os.makedirs(OUT_DIR, exist_ok=True) # create the output folder
-
-class CorpusChEMBL(DataProvidingCorpus):
-
-    def __init__(self
-                 , gene_names : list
-                 , clean_raw=False
-                 , smiles_field="CANONICAL_SMILES"
-                 , extracted_fields=(
-                    "MOLECULE_CHEMBL_ID"
-                    , "CANONICAL_SMILES"
-                    , "PCHEMBL_VALUE"
-                    , "ACTIVITY_COMMENT"
-                    )
-                 ):
-        super().__init__(smiles_col=smiles_field)
-        self.gene_names = gene_names
-        self.extracted_fields = extracted_fields
-        self.CHEMBL_TARGETS = new_client.target
-        self.CHEMBL_COMPOUNDS = new_client.molecule
-        self.CHEMBL_ACTIVITIES = new_client.activity
-        self.raw_data = pd.DataFrame()
-        self.clean_raw = clean_raw
-
-    def _cleanRaw(self):
-        subset = set(self.extracted_fields)
-        subset.discard("ACTIVITY_COMMENT")
-        self.raw_data = self.raw_data.dropna(subset=subset)
-        for i, row in self.raw_data.iterrows():
-            # replacing the nitrogen electrical group to nitrogen atom "N"
-            smile = row['CANONICAL_SMILES'].replace('[NH+]', 'N').replace('[NH2+]', 'N').replace('[NH3+]', 'N')
-            # removing the radioactivity of each atom
-            smile = re.sub('\[\d+', '[', smile)
-            # reserving the largest fragments
-            if '.' in smile:
-                frags = smile.split('.')
-                ix = np.argmax([len(frag) for frag in frags])
-                smile = frags[ix]
-            # Transforming into canonical SMILES based on the Rdkit built-in algorithm.
-            self.raw_data.loc[i, 'CANONICAL_SMILES'] = Chem.CanonSmiles(smile, 0)
-            # removing molecule contained metal atom
-            if '[Au]' in smile or '[As]' in smile or '[Hg]' in smile or '[Se]' in smile or smile.count('C') + smile.count('c') < 2:
-                self.raw_data = self.raw_data.drop(i)
-        self.raw_data = self.raw_data.sample(frac=1)
-
-    def updateData(self, update_voc=False, sample=None):
-        self.words = set()
-        self.raw_data = pd.DataFrame()
-
-        for gene_name in self.gene_names:
-            target_chembl_ids = []
-            for result in self.CHEMBL_TARGETS.filter(
-                    target_synonym__icontains=gene_name
-                    , target_type='SINGLE PROTEIN'
-                    , organism='Homo sapiens'
-            ):
-                target_chembl_ids.append(result['target_chembl_id'])
-            print("Found following target chembl IDs related to {0}".format(gene_name), target_chembl_ids)
-
-            compound_data = dict()
-            for field in self.extracted_fields:
-                compound_data[field] = []
-            for result in tqdm(self.CHEMBL_ACTIVITIES.filter(
-                    target_chembl_id__in=target_chembl_ids
-                    # , pchembl_value__isnull=False
-            ), desc="Downloading compound data..."):
-                for field in self.extracted_fields:
-                    compound_data[field].append(result[field.lower()])
-            self.raw_data = self.raw_data.append(pd.DataFrame(compound_data))
-
-        # cleanup the raw data in this instance
-        if self.clean_raw:
-            self._cleanRaw()
-
-        tokens, canons, self.words = self.fromDataFrame(self.raw_data, self.voc, self.smiles_column, sample)
-
-        self.resetDF(canons, tokens, update_voc)
-
-        return self.df, self.voc
-
 
 def data():
     ZINC_CSV=os.path.join(DATA_DIR, "ZINC.txt") # randomly selected sample from the ZINC database
