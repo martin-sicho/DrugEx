@@ -136,13 +136,11 @@ def data():
 
     # Now we update the corpus (if we did not do it already).
     # It loads and tokenizes the SMILES it finds in the CSV.
-    # In this particular case we request the vocabulary to be updated
-    # and that we only take a random sample of 1000 molecules from
-    # the file. The tokenized data and updated vocabulary are returned to us.
+    # The tokenized data and updated vocabulary are returned to us.
     corpus_out_zinc = os.path.join(OUT_DIR, "zinc_corpus.txt")
     vocab_out_zinc = os.path.join(OUT_DIR, "zinc_voc.txt")
     if not os.path.exists(corpus_out_zinc):
-        df, voc = corpus_pre.updateData(update_voc=True, sample=100000)
+        df, voc = corpus_pre.updateData(update_voc=True)
         # We don't really use the return values here, but they are
         # still there if we need them for logging purposes or
         # something else.
@@ -235,7 +233,6 @@ def main():
     # the "easiest" part comes first
     # the environment model for policy gradient
     environ_model = environ(environ_data)
-    return
 
     # Now we can pretrain our exploitation network.
     # This takes a long time and is a quite complex
