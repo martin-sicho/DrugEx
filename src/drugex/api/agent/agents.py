@@ -91,7 +91,7 @@ class DrugExAgentTrainer(AgentTrainer):
             self.monitor.finalizeEpoch(epoch, self.n_epochs)
 
         self.monitor.close()
-        self.exploit.setState(self.best_state)
+        self.exploit.setState(self)
 
     def sample(self, n_samples):
         if self.best_state:
