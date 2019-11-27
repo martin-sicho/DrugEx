@@ -99,6 +99,10 @@ s        """
         smile = smile.replace('L', 'Cl').replace('R', 'Br')
         return smile
 
+    def __add__(self, other):
+        chars_new = self.chars | other.chars
+        return Voc(chars=chars_new)
+
 
 class MolData(Dataset):
     """Custom PyTorch Dataset that takes a file containing separated SMILES
