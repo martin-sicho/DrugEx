@@ -4,9 +4,8 @@ agents
 Created by: Martin Sicho
 On: 21-11-19, 12:04
 """
-import os
 
-from abc import ABC, abstractmethod
+from abc import abstractmethod
 from tqdm import trange
 
 from drugex.api.agent.callbacks import AgentMonitor
@@ -71,7 +70,7 @@ class DrugExAgentTrainer(AgentTrainer):
 
             # The model with best percentage of unique desired SMILES will be persisted on the hard drive.
             is_best = False
-            if best_score < unique:
+            if best_score < unique or self.best_state is None:
                 is_best = True
                 self.best_state = self.exploit.getState()
                 best_score = unique
