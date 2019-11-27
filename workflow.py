@@ -21,8 +21,12 @@ from drugex.api.model.callbacks import BasicMonitor
 from drugex.api.pretrain.generators import BasicGenerator
 
 DATA_DIR="data" # folder with input data files
-OUT_DIR="output/workflow_out" # folder to store the output of this workflow
+OUT_DIR="output/workflow" # folder to store the output of this workflow
 os.makedirs(OUT_DIR, exist_ok=True) # create the output folder
+
+# define a set of gene IDs that are interesting for 
+# the target that we want to design molecules for
+GENE_IDS = ["ADORA2A"]
 
 def data():
     ZINC_CSV=os.path.join(DATA_DIR, "ZINC.txt") # randomly selected sample from the ZINC database
@@ -77,9 +81,9 @@ def data():
     # and pulls all compounds that have activity data available.
     corpus_out_chembl = os.path.join(OUT_DIR, "chembl_corpus.txt")
     vocab_out_chembl = os.path.join(OUT_DIR, "chembl_voc.txt")
-    env_data_path = os.path.join(OUT_DIR, "ADORA2A.txt")
+    env_data_path = os.path.join(OUT_DIR, "{0}.txt".format(GENE_IDS[0]))
     if not os.path.exists(corpus_out_chembl):
-        corpus_ex = CorpusChEMBL(["ADORA2A"], clean_raw=True)
+        corpus_ex = CorpusChEMBL(GENE_IDS, clean_raw=True)
 
         # lets update this corpus and save the results
         # (same procedure as above)
