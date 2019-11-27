@@ -14,11 +14,15 @@ from tqdm import tqdm
 
 import drugex
 from drugex import Voc
-from drugex.api.corpus import CorpusCSV, DataProvidingCorpus
+from drugex.api.agent.agents import DrugExAgentTrainer
+from drugex.api.agent.callbacks import BasicAgentMonitor
+from drugex.api.agent.policy import PG
+from drugex.api.corpus import CorpusCSV, DataProvidingCorpus, BasicCorpus
 
 from chembl_webresource_client.new_client import new_client
 import pandas as pd
 
+from drugex.api.designer.designers import BasicDesigner, CSVConsumer
 from drugex.api.environ.data import ChEMBLCSV
 from drugex.api.environ.models import RF
 from drugex.api.environ.serialization import FileEnvSerializer, FileEnvDeserializer
@@ -186,6 +190,17 @@ def data():
         # we can load it using the CorpusCSV class
         corpus_ex = CorpusCSV.fromFiles(corpus_out_chembl, vocab_out_chembl)
 
+    # Since we requested to update the vocabulary according to
+    # tokens found in the underlying smiles for both the zinc
+    # and ChEMBL corpus, we now need to unify them. Vocabularies
+    # can be combined using the plus operator:
+    voc_all = corpus_pre.voc + corpus_ex.voc
+    corpus_pre.voc = voc_all
+    corpus_ex.voc = voc_all
+    # If we did not do this, the exploitation and
+    # exploration networks would not be compatible
+    # and we would not be able to train the final DrugEx model
+
     # We also need activity data to
     # train the model which will provide the activity
     # values for policy gradient.
@@ -250,6 +265,7 @@ def main():
     # We use that feature below if there already is
     # a network state saved somewhere in our output directory.
     if not pr_monitor.getState(): # this will be False if the monitor cannot find an existing state
+        print("Pretraining exploitation network...")
         pretrained = BasicGenerator(
             monitor=pr_monitor
             , corpus=corpus_pre
@@ -260,16 +276,121 @@ def main():
             }
         )
         pretrained.pretrain()
+        # This method also has parameters
+        # regarding partioning of the training data.
+        # We just use the defaults in this case.
     else:
         pretrained = BasicGenerator(
             monitor=pr_monitor
             , initial_state=pr_monitor # the monitor provides initial state
             , corpus=corpus_pre
+            # If we are not training this generator,
+            # we could also omit this argument entirely.
+            # If we did, the default vocabulary would be used
+            # (not what we want now).
         )
         # we will not do any training this time,
-        # but we could just continue
+        # but we could just continue by
+        # specifying the training parameters and
+        # calling pretrain again
+        # TODO: maybe it would be nice if the monitor
+        # keeps track of the settings as well
 
+    # We will train the exploration network now.
+    # The method is the same, but we use different
+    # inputs. We define the monitor first:
+    ex_monitor = BasicMonitor(
+        out_dir=OUT_DIR
+        , identifier="ex"
+    )
+    # The exploitation network fine-tunes the pretrained
+    # one so we have to use the pr_monitor to initialize
+    # its starting state:
+    corpus_ex.voc = corpus_pre.voc
+    if not ex_monitor.getState():
+        print("Pretraining exploration network...")
+        exploration = BasicGenerator(
+            monitor=ex_monitor
+            , initial_state=pr_monitor
+            , corpus=corpus_ex # We use the target-specific corpus instead.
+            , train_params={
+                "epochs" : 3 # We will make this one quick too.
+            }
+        )
+        exploration.pretrain(validation_size=512)
+        # In this case we want to use a validation set.
+        # This set will be used to estimate the
+        # loss instead of the training set.
+    else:
+        exploration = BasicGenerator(
+            monitor=ex_monitor
+            , initial_state=ex_monitor
+            , corpus=corpus_ex
+        )
 
+    # We have all ingredients to train
+    # the DrugEx agent now. First, we
+    # need to define the policy gradient
+    # strategy:
+    policy = PG( # So far this is the only policy there is in the API
+        batch_size=512
+        , mc=10
+        , epsilon=0.01
+        , beta=0.1
+    )
+    # DrugEx agents have their own monitors.
+    # The basic one uses files and the same pattern
+    # as we have seen with generators:
+    identifier = 'e_%.2f_%.1f_%dx%d' % (policy.epsilon, policy.beta, policy.batch_size, policy.mc)
+    agent_monitor = BasicAgentMonitor(OUT_DIR, identifier)
+    # Finally, the DrugEx agent itself:
+    if not agent_monitor.getState():
+        print("Training DrugEx agent...")
+        agent = DrugExAgentTrainer(
+            agent_monitor # our monitor
+            , environ_model # environment for the policy gradient
+            , pretrained # the pretrained model
+            , policy # our policy gradient implemntation
+            , exploration # the fine-tuned model
+            , {"n_epochs" : 3}
+        )
+        agent.train()
+    else:
+        # The DrugEx agent monitor also provides
+        # a generator state -> it is the
+        # best model as determined by
+        # the agent trainer. We can
+        # therefore create a generator based on this initial state
+        agent = BasicGenerator(
+            initial_state=agent_monitor
+            , corpus=BasicCorpus(
+                # if we are not training the generator,
+                # we can just provide a basic corpus
+                # that only provides vocabulary
+                # and no corpus data -> we
+                # only have to specify the right
+                # vocabulary, which is the one of
+                # the exploration or exploitation network
+                # we choose the exploration network here:
+                vocabulary=corpus_pre.voc
+            )
+        )
+
+    # From a fully trained DrugEx agent,
+    # we can create a designer class which
+    # will handle sampling of SMILES:
+    consumer = CSVConsumer(
+        # this is
+        os.path.join(OUT_DIR, 'designer_mols.csv')
+    )
+    designer = BasicDesigner(
+        agent=agent # our agent
+        , consumer=consumer # use this consumer to return results
+        , n_samples=1000 # number of SMILES to sample in total
+        , batch_size=512 # number of SMILES to sample in one batch
+    )
+    designer() # design the molecules
+    consumer.save() # save the consumed molecules
 
 if __name__ == "__main__":
     main()
