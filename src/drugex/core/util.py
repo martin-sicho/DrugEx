@@ -214,7 +214,7 @@ class Environment:
                 DataStructs.ConvertToNumpyArray(fp, arr)
                 fps[i, :] = arr
             except:
-                print(smile)
+                # print(smile) # FIXME: something better should be done in this case
                 fps[i, :] = [0] * bit_len
         return pd.DataFrame(fps, index=(smiles if index is None else index))
 
