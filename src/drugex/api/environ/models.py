@@ -14,7 +14,13 @@ from drugex.api.environ.data import EnvironData
 from drugex.api.environ.serialization import EnvironSerializer, EnvironDeserializer
 from drugex.core import util
 
-class Environ(ABC):
+class EnvironProvider(ABC):
+
+    @abstractmethod
+    def predictSMILES(self, smiles):
+        pass
+
+class Environ(EnvironProvider):
 
     @staticmethod
     def load(deserializer : EnvironDeserializer):
@@ -26,10 +32,6 @@ class Environ(ABC):
 
     @abstractmethod
     def fit(self):
-        pass
-
-    @abstractmethod
-    def predictSMILES(self, smiles):
         pass
 
     @abstractmethod
