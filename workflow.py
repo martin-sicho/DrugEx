@@ -214,7 +214,6 @@ def main():
     # The exploitation network fine-tunes the pretrained
     # one so we have to use the pr_monitor to initialize
     # its starting state:
-    corpus_ex.voc = corpus_pre.voc
     if not ex_monitor.getState():
         print("Pretraining exploration network...")
         exploration = BasicGenerator(
