@@ -419,9 +419,13 @@ class Generator(nn.Module):
         optimizer = optim.Adam(self.parameters(), lr=lr)
         best_error = np.inf
         total_epochs = epochs
-        total_steps = len(loader_train)
+        total_batches = len(loader_train)
+        total_steps = total_batches * total_epochs
+        current_step = 0
         for epoch in trange(epochs, desc='Epoch'):
             for i, batch in enumerate(loader_train):
+                current_step += 1
+                current_batch = i
                 optimizer.zero_grad()
                 loss_train = self.likelihood(batch.to(util.dev))
                 loss_train = -loss_train.mean()
@@ -429,7 +433,7 @@ class Generator(nn.Module):
                 optimizer.step()
                 # Performance Evaluation
                 current_loss_valid = None
-                if monitor_freq > 0 and i % monitor_freq == 0 or loader_valid is not None:
+                if (monitor_freq > 0 and i % monitor_freq == 0) or loader_valid is not None:
                     # 1000 SMILES is sampled
                     seqs = self.sample(1000)
                     # ix = util.unique(seqs)
@@ -469,7 +473,7 @@ class Generator(nn.Module):
                         monitor.performance(current_loss_train, current_loss_valid, current_error_rate, best_error)
                         for j, smile in enumerate(smiles):
                             monitor.smiles(smile, valids[j])
-                        monitor.finalizeStep(epoch+1, i+1, total_epochs, total_steps)
+                        monitor.finalizeStep(epoch+1, current_batch, current_step+1, total_epochs, total_batches, total_steps)
 
         for monitor in self.monitors:
             monitor.close()
