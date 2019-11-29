@@ -473,7 +473,7 @@ class Generator(nn.Module):
                         monitor.performance(current_loss_train, current_loss_valid, current_error_rate, best_error)
                         for j, smile in enumerate(smiles):
                             monitor.smiles(smile, valids[j])
-                        monitor.finalizeStep(epoch+1, current_batch, current_step+1, total_epochs, total_batches, total_steps)
+                        monitor.finalizeStep(epoch+1, current_batch, current_step, total_epochs, total_batches, total_steps)
 
         for monitor in self.monitors:
             monitor.close()
