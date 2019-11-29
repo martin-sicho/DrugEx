@@ -58,13 +58,13 @@ class BasicMonitor(PretrainingMonitor):
         self.out_dir = out_dir
         os.makedirs(self.out_dir, exist_ok=True)
         self.identifier = identifier
-        self.loss_train = []
-        self.loss_valid = []
-        self.error_rate = []
-        self.best_error = []
-        self.step = []
-        self.epoch = []
-        self.info = []
+        self.loss_train = None
+        self.loss_valid = None
+        self.error_rate = None
+        self.best_error = None
+        self.step = None
+        self.epoch = None
+        self.info = None
 
     def getState(self):
         return self.best_state
@@ -122,19 +122,19 @@ class BasicMonitor(PretrainingMonitor):
         current_step = current_step + self.last_step
         current_epoch = current_epoch + self.last_epoch
 
-        self.info.append("Epoch: %d step: %d error_rate: %.3f loss_train: %.3f loss_valid %.3f" % (current_epoch, current_step, self.error_rate[-1], self.loss_train[-1], self.loss_valid[-1] if self.loss_valid[-1] is not None else np.inf))
-        print(self.info[-1], file=self.log)
+        self.info = "Epoch: %d step: %d error_rate: %.3f loss_train: %.3f loss_valid %.3f" % (current_epoch, current_step, self.error_rate, self.loss_train, self.loss_valid if self.loss_valid is not None else np.inf)
+        print(self.info, file=self.log)
         self.log.flush()
 
-        self.step.append(current_step)
-        self.epoch.append(current_epoch)
+        self.step = current_step
+        self.epoch = current_epoch
         df = pd.DataFrame(
             {
                 "STEP" : [current_step]
                 , "EPOCH" : [current_epoch]
-                , "LOSS_TRAIN" : [self.loss_train[-1]]
-                , "LOSS_VALID" : [self.loss_valid[-1]]
-                , "ERROR_RATE" : [self.error_rate[-1]]
+                , "LOSS_TRAIN" : [self.loss_train]
+                , "LOSS_VALID" : [self.loss_valid]
+                , "ERROR_RATE" : [self.error_rate]
                 , "RUN" : self.last_run+1
             }
         )
@@ -147,10 +147,10 @@ class BasicMonitor(PretrainingMonitor):
         plt.close(self.getPerfFigure())
 
     def performance(self, loss_train, loss_valid, error_rate, best_error):
-        self.loss_train.append(loss_train)
-        self.loss_valid.append(loss_valid)
-        self.error_rate.append(error_rate)
-        self.best_error.append(best_error)
+        self.loss_train = loss_train
+        self.loss_valid = loss_valid
+        self.error_rate = error_rate
+        self.best_error = best_error
 
     def smiles(self, smiles, is_valid):
         print('%d\t%s' % (is_valid, smiles), file=self.log)
@@ -180,7 +180,7 @@ class BasicMonitor(PretrainingMonitor):
         ax1 = fig.add_subplot(111)
 
         ax1.plot(df["STEP"], df["LOSS_TRAIN"] / 100, c='b', label='training loss')
-        if self.loss_valid[-1]:
+        if self.loss_valid:
             ax1.plot(df["STEP"], df["LOSS_VALID"] / 100, c='r', label='validation loss')
         ax1.plot(df["STEP"], 1 - df["ERROR_RATE"], c='g', label='SMILES validity')
         plt.legend(loc='upper right')
