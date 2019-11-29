@@ -252,12 +252,11 @@ class CorpusChEMBL(DataProvidingCorpus):
                     compound_data[field].append(result[field.lower()])
             self.raw_data = self.raw_data.append(pd.DataFrame(compound_data))
 
+        tokens, canons, self.words = self.fromDataFrame(self.raw_data, self.voc, self.smiles_column, sample)
+        self.resetDF(canons, tokens, update_voc)
+
         # cleanup the raw data in this instance
         if self.clean_raw:
             self._cleanRaw()
-
-        tokens, canons, self.words = self.fromDataFrame(self.raw_data, self.voc, self.smiles_column, sample)
-
-        self.resetDF(canons, tokens, update_voc)
 
         return self.df, self.voc
