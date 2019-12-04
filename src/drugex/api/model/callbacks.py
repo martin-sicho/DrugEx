@@ -62,6 +62,8 @@ class BasicMonitor(PretrainingMonitor):
         self.loss_valid = None
         self.error_rate = None
         self.best_error = None
+        self.total_steps = None
+        self.total_epochs = None
         self.step = None
         self.epoch = None
         self.info = None
@@ -121,6 +123,8 @@ class BasicMonitor(PretrainingMonitor):
         ):
         current_step = current_step + self.last_step
         current_epoch = current_epoch + self.last_epoch
+        self.total_steps = total_steps
+        self.total_epochs = total_epochs
 
         self.info = "Epoch: %d step: %d error_rate: %.3f loss_train: %.3f loss_valid %.3f" % (current_epoch, current_step, self.error_rate, self.loss_train, self.loss_valid if self.loss_valid is not None else np.inf)
         print(self.info, file=self.log)
@@ -179,11 +183,13 @@ class BasicMonitor(PretrainingMonitor):
         fig = plt.figure()
         ax1 = fig.add_subplot(111)
 
-        ax1.plot(df["STEP"], df["LOSS_TRAIN"] / 100, c='b', label='training loss')
+        progress = self.total_epochs * (df["STEP"] / self.total_steps)
+        ax1.plot(progress, df["LOSS_TRAIN"] / 10, c='b', label='training loss')
         if self.loss_valid:
-            ax1.plot(df["STEP"], df["LOSS_VALID"] / 100, c='r', label='validation loss')
-        ax1.plot(df["STEP"], 1 - df["ERROR_RATE"], c='g', label='SMILES validity')
-        plt.legend(loc='upper right')
+            ax1.plot(progress, df["LOSS_VALID"] / 10, c='r', label='validation loss')
+        ax1.plot(progress, 1 - df["ERROR_RATE"], c='g', label='SMILES validity')
+        plt.ylim([0.0, 1.0])
+        plt.legend(loc='center right')
         if save_png:
             plt.savefig(os.path.join(self.out_dir, "net_{0}.png".format(self.identifier)))
         return fig
