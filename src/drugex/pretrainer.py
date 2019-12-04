@@ -21,7 +21,8 @@ from drugex.api.pretrain.generators import BasicGenerator
 def _main_helper(*, input_directory, batch_size, epochs_pr, epochs_ex, output_directory, use_tqdm=False):
     # Construction of the pretrainer corpus
     zinc_corpus = os.path.join(input_directory, "zinc_corpus.txt")
-    pre_corpus = CorpusCSV.fromFiles(corpus_path=zinc_corpus)
+    voc_path = os.path.join(input_directory, "voc.txt")
+    pre_corpus = CorpusCSV.fromFiles(vocab_path=voc_path, corpus_path=zinc_corpus)
 
     # Pre-training the RNN model with ZINC set
     pr_logger = BasicMonitor(out_dir=output_directory, identifier="pr")
@@ -38,13 +39,12 @@ def _main_helper(*, input_directory, batch_size, epochs_pr, epochs_ex, output_di
             "batch_size" : batch_size
             , "shuffle" : True
             , "drop_last" : True
-            , "collate_fn" : util.MolData.collate_fn
         })
         print('Exploitation network training is finished!')
 
     # Fine-tuning the RNN model with A2AR set as exploration stragety
     chembl_corpus = os.path.join(input_directory, 'chembl_corpus.txt')
-    ex_corpus = CorpusCSV.fromFiles(corpus_path=chembl_corpus)
+    ex_corpus = CorpusCSV.fromFiles(vocab_path=voc_path, corpus_path=chembl_corpus)
     ex_logger = BasicMonitor(out_dir=output_directory, identifier="ex")
     explore = BasicGenerator(
         monitor=ex_logger
@@ -58,12 +58,10 @@ def _main_helper(*, input_directory, batch_size, epochs_pr, epochs_ex, output_di
     explore.pretrain(
         train_loader_params={
             "batch_size" : batch_size
-            , "collate_fn" : util.MolData.collate_fn
         }
         , validation_size=batch_size
         , valid_loader_params={
             "batch_size" : batch_size
-            , "collate_fn" : util.MolData.collate_fn
         }
     )
     print('Exploration network training is finished!')
