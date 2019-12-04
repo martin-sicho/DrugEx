@@ -11,7 +11,7 @@ from rdkit import Chem, rdBase
 from rdkit.Chem import Draw
 from sklearn import metrics
 
-from drugex.core.utils import converage, dimension, diversity, logP_mw, properties, substructure, training_process
+from drugex.core.metric import converage, dimension, diversity, logP_mw, properties, substructure, training_process
 
 # configuration for drawing figures on linux
 plt.switch_backend('Agg')
