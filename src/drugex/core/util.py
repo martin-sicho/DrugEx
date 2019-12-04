@@ -33,12 +33,14 @@ class Voc(object):
         path (str): the path of vocabulary file that contains all of the tokens split by '\n'
     """
     def __init__(self, path=None, chars=tuple(), max_len=100):
-        self.chars = set(['EOS', 'GO'] + list(chars))
+        chars = list(chars)
+        self.meta_chars = ['EOS', 'GO']
+        self.chars = self.meta_chars + [x for x in chars if x not in self.meta_chars]
         if path is not None and os.path.exists(path):
             f = open(path, 'r')
             file_chars = f.read().split()
-            assert len(set(file_chars)) == len(file_chars) # TODO: replace with Exception
-            self.chars.update(set(file_chars))
+            assert len(set(file_chars)) == len(file_chars) # TODO: replace with Exception or remove
+            self.chars += [x for x in file_chars if x not in self.chars]
         self.size = len(self.chars)
         # dict -> {token: index} for encoding
         self.tk2ix = dict(zip(self.chars, range(len(self.chars))))
@@ -46,7 +48,8 @@ class Voc(object):
         self.ix2tk = {v: k for k, v in self.tk2ix.items()}
         self.max_len = max_len
 
-    def tokenize(self, smile):
+    @staticmethod
+    def tokenize(smile):
         """Transform a SMILES string into a series of tokens
         Arguments:
             smile (str): SMILES string with correct grammar
@@ -100,7 +103,7 @@ s        """
         return smile
 
     def __add__(self, other):
-        chars_new = self.chars | other.chars
+        chars_new = tuple(self.chars) + tuple(x for x in other.chars if x not in self.chars)
         return Voc(chars=chars_new)
 
 
@@ -237,7 +240,7 @@ def check_smiles(seqs, voc):
     smiles = []
     for j, seq in enumerate(seqs.cpu()):
         smile = voc.decode(seq)
-        valids.append(1 if Chem.MolFromSmiles(smile) else 0)
+        valids.append(1 if len(smile) != 0 and Chem.MolFromSmiles(smile) else 0)
         smiles.append(smile)
     valids = np.array(valids, dtype=np.byte)
     return smiles, valids

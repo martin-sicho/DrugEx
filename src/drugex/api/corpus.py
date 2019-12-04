@@ -25,7 +25,6 @@ class Corpus(ABC):
 
     def __init__(self, vocabulary = VOC_DEFAULT):
         self.voc = vocabulary
-        self.words = set(self.voc.chars)
         self.sep = "\t"
 
 class BasicCorpus(Corpus):
@@ -49,7 +48,7 @@ class DataProvidingCorpus(Corpus):
     def saveVoc(self, out):
         # persisting the vocabulary on the hard drive.
         with open(out, 'w') as file:
-            file.write('\n'.join(sorted(self.words)))
+            file.write('\n'.join(self.voc.chars))
 
     def saveCorpus(self, out):
         self.df.to_csv(out, sep=self.sep, index=None)
@@ -74,7 +73,6 @@ class DataProvidingCorpus(Corpus):
                 "batch_size" : 512
                 , "shuffle" : True
                 , "drop_last" : False
-                , "collate_fn" : util.MolData.collate_fn
             }
 
         if self.df.empty:
@@ -89,25 +87,11 @@ class DataProvidingCorpus(Corpus):
             if exclude_sampled:
                 self.sampled_idx = sample.index
         sample = util.MolData(sample, self.voc, token='SENT')
-        if loader_params:
-            return DataLoader(sample, **loader_params)
-        else:
-            return DataLoader(sample)
+        loader_params.update({"collate_fn" : sample.collate_fn})
+        print("DataLoader parameters: ", loader_params)
+        return DataLoader(sample, **loader_params)
 
-    def resetDF(self, canons, tokens, update_voc):
-        self.df = pd.DataFrame()
-
-        # saving the canonical smiles and token sentences as a basis for future transformations
-        self.df[self.smiles_column] = canons
-        self.df[self.token] = tokens
-        self.df.drop_duplicates(subset=self.smiles_column, inplace=True)
-
-        # rewrite the current voc instance if requested
-        if update_voc:
-            self.voc = Voc(chars=self.words)
-
-    @staticmethod
-    def fromDataFrame(df, voc, smiles_column, sample=None):
+    def updateDataFrame(self, df, smiles_column, update_voc, sample=None):
         df = df[smiles_column].dropna().drop_duplicates()
         tokens = []
         canons = []
@@ -136,7 +120,7 @@ class DataProvidingCorpus(Corpus):
         it = tqdm(smiles, desc='Collecting tokens')
         for smile in it:
             try:
-                token = voc.tokenize(smile)
+                token = Voc.tokenize(smile)
                 if len(token) <= 100:
                     words.update(token)
                     canons.append(Chem.CanonSmiles(smile, 0))
@@ -144,7 +128,14 @@ class DataProvidingCorpus(Corpus):
             except Exception as e:
                 it.write('{} {}'.format(e, smile))
 
-        return tokens, canons, words
+        self.df = pd.DataFrame()
+        # saving the canonical smiles and token sentences as a basis for future transformations
+        self.df[self.smiles_column] = canons
+        self.df[self.token] = tokens
+
+        # rewrite the current voc instance if requested
+        if update_voc:
+            self.voc = Voc(chars=list(words))
 
 class CorpusCSV(DataProvidingCorpus):
 
@@ -175,13 +166,8 @@ class CorpusCSV(DataProvidingCorpus):
             out : the path for vocabulary (containing all of tokens for SMILES construction)
                 and output table (including CANONICAL_SMILES and whitespace delimited token sentence)
         """
-        self.words = set()
 
-        df = pd.read_table(self.update_file, sep=self.sep)
-        tokens, canons, self.words = self.fromDataFrame(df, self.voc, self.smiles_column, sample=sample)
-
-        self.resetDF(canons, tokens, update_voc)
-
+        self.updateDataFrame(pd.read_table(self.update_file, sep=self.sep), self.smiles_column, update_voc, sample=sample)
         return self.df, self.voc
 
 class CorpusChEMBL(DataProvidingCorpus):
@@ -228,7 +214,6 @@ class CorpusChEMBL(DataProvidingCorpus):
         self.raw_data = self.raw_data.sample(frac=1)
 
     def updateData(self, update_voc=False, sample=None):
-        self.words = set()
         self.raw_data = pd.DataFrame()
 
         for gene_name in self.gene_names:
@@ -252,8 +237,7 @@ class CorpusChEMBL(DataProvidingCorpus):
                     compound_data[field].append(result[field.lower()])
             self.raw_data = self.raw_data.append(pd.DataFrame(compound_data))
 
-        tokens, canons, self.words = self.fromDataFrame(self.raw_data, self.voc, self.smiles_column, sample)
-        self.resetDF(canons, tokens, update_voc)
+        self.updateDataFrame(self.raw_data, self.smiles_column, update_voc, sample)
 
         # cleanup the raw data in this instance
         if self.clean_raw:
