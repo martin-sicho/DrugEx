@@ -94,6 +94,7 @@ class BasicGenerator(PretrainableGenerator, PolicyAwareGenerator):
                 train_loader = self.corpus.getDataLoader(loader_params=train_loader_params)
                 valid_loader = None
 
+            print("Training parameters:", self.train_params)
             self.model.fit(
                 train_loader
                 , loader_valid=valid_loader
