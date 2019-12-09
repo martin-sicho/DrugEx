@@ -175,6 +175,7 @@ class CorpusChEMBL(DataProvidingCorpus):
     def __init__(self
                  , gene_names : list
                  , clean_raw=False
+                 , randomize=True
                  , smiles_field="CANONICAL_SMILES"
                  , extracted_fields=(
                     "MOLECULE_CHEMBL_ID"
@@ -191,6 +192,7 @@ class CorpusChEMBL(DataProvidingCorpus):
         self.CHEMBL_ACTIVITIES = new_client.activity
         self.raw_data = pd.DataFrame()
         self.clean_raw = clean_raw
+        self.randomize = randomize
 
     def _cleanRaw(self):
         subset = set(self.extracted_fields)
@@ -211,7 +213,6 @@ class CorpusChEMBL(DataProvidingCorpus):
             # removing molecule contained metal atom
             if '[Au]' in smile or '[As]' in smile or '[Hg]' in smile or '[Se]' in smile or smile.count('C') + smile.count('c') < 2:
                 self.raw_data = self.raw_data.drop(i)
-        self.raw_data = self.raw_data.sample(frac=1)
 
     def updateData(self, update_voc=False, sample=None):
         self.raw_data = pd.DataFrame()
@@ -242,5 +243,9 @@ class CorpusChEMBL(DataProvidingCorpus):
         # cleanup the raw data in this instance
         if self.clean_raw:
             self._cleanRaw()
+
+        # randomize if requested
+        if self.randomize:
+            self.raw_data = self.raw_data.sample(frac=1)
 
         return self.df, self.voc
