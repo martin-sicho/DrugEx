@@ -52,7 +52,7 @@ class PG(PolicyGradient):
         preds = environ.predictSMILES(smiles)
         preds[valids == False] = 0
         preds -= self.beta
-        preds = torch.Tensor(preds.reshape(-1, 1)).to(util.dev)
+        preds = torch.Tensor(preds.reshape(-1, 1)).to(util.getDev())
 
         ds = TensorDataset(seqs, preds)
         loader = DataLoader(ds, batch_size=self.batch_size)

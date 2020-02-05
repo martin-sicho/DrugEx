@@ -15,14 +15,16 @@ from rdkit.Chem.Scaffolds import MurckoScaffold
 from sklearn.externals import joblib
 from torch.utils.data import Dataset
 
-torch.set_num_threads(1)
-rdBase.DisableLog('rdApp.error')
-# designate the device that the PyTorch is allowed to use.
-if torch.cuda.is_available():
-    dev = torch.device('cuda')
-else:
-    dev = torch.device('cpu')
+def getDev():
+    torch.set_num_threads(1)
+    rdBase.DisableLog('rdApp.error')
+    # designate the device that the PyTorch is allowed to use.
+    if torch.cuda.is_available():
+        dev = torch.device('cuda')
+    else:
+        dev = torch.device('cpu')
 
+    return dev
 
 class Voc(object):
     """ Vocabulary Class for all of the tokens for SMILES string construction.
@@ -266,5 +268,5 @@ def unique(arr):
     arr = arr.cpu().numpy()
     arr_ = np.ascontiguousarray(arr).view(np.dtype((np.void, arr.dtype.itemsize * arr.shape[1])))
     _, indices = np.unique(arr_, return_index=True)
-    indices = torch.LongTensor(np.sort(indices)).to(dev)
+    indices = torch.LongTensor(np.sort(indices)).to(getDev())
     return indices

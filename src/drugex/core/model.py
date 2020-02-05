@@ -54,7 +54,7 @@ class Base(nn.Module):
                 param_group['lr'] = lr * (1 - 1 / epochs) ** (epoch * 10)
             for i, (Xb, yb) in enumerate(train_loader):
                 # Batch of target tenor and label tensor
-                Xb, yb = Xb.to(util.dev), yb.to(util.dev)
+                Xb, yb = Xb.to(util.getDev()), yb.to(util.getDev())
                 optimizer.zero_grad()
                 # predicted probability tensor
                 y_ = self.forward(Xb, istrain=True)
@@ -97,7 +97,7 @@ class Base(nn.Module):
         """
         loss = 0
         for Xb, yb in loader:
-            Xb, yb = Xb.to(util.dev), yb.to(util.dev)
+            Xb, yb = Xb.to(util.getDev()), yb.to(util.getDev())
             y_ = self.forward(Xb)
             ix = yb == yb
             yb, y_ = yb[ix], y_[ix]
@@ -119,7 +119,7 @@ class Base(nn.Module):
         """
         score = []
         for Xb, yb in loader:
-            Xb = Xb.to(util.dev)
+            Xb = Xb.to(util.getDev())
             y_ = self.forward(Xb)
             score.append(y_.detach().cpu())
         score = torch.cat(score, dim=0).numpy()
@@ -154,7 +154,7 @@ class STFullyConnected(Base):
             # loss function and activation function of output layer for multiple classification
             self.criterion = nn.CrossEntropyLoss()
             self.activation = nn.Softmax()
-        self.to(util.dev)
+        self.to(util.getDev())
 
     def forward(self, X, istrain=False):
         """Invoke the class directly as a function
@@ -207,7 +207,7 @@ class MTFullyConnected(Base):
             # loss function and activation function of output layer for multiple classification
             self.criterion = nn.BCELoss()
             self.activation = nn.Sigmoid()
-        self.to(util.dev)
+        self.to(util.getDev())
 
     def forward(self, X, istrain=False):
         """Invoke the class directly as a function
@@ -267,7 +267,7 @@ class Generator(nn.Module):
             self.rnn = nn.GRU(embed_size, hidden_size, num_layers=3, batch_first=True)
         self.linear = nn.Linear(hidden_size, voc.size)
         self.optim = torch.optim.Adam(self.parameters())
-        self.to(util.dev)
+        self.to(util.getDev())
 
     def forward(self, input, h):
         """Invoke the instance of this class as an function directly.
@@ -303,8 +303,8 @@ class Generator(nn.Module):
             c (FloatTensor): the LSTM cell states for the recurrent layers initialization,
                 this tensor is only for LSTM based recurrent layers.
         """
-        h = torch.zeros(3, batch_size, self.hidden_size).to(util.dev)
-        c = torch.zeros(3, batch_size, self.hidden_size).to(util.dev)
+        h = torch.zeros(3, batch_size, self.hidden_size).to(util.getDev())
+        c = torch.zeros(3, batch_size, self.hidden_size).to(util.getDev())
         return (h, c) if self.is_lstm else h
 
     def likelihood(self, target):
@@ -321,9 +321,9 @@ class Generator(nn.Module):
                 the maximum size of the tokens for the whole SMILES strings
         """
         batch_size, seq_len = target.size()
-        x = torch.LongTensor([self.voc.tk2ix['GO']] * batch_size).to(util.dev)
+        x = torch.LongTensor([self.voc.tk2ix['GO']] * batch_size).to(util.getDev())
         h = self.init_h(batch_size)
-        scores = torch.zeros(batch_size, seq_len).to(util.dev)
+        scores = torch.zeros(batch_size, seq_len).to(util.getDev())
         for step in range(seq_len):
             logits, h = self(x, h)
             score = logits.log_softmax(dim=-1)
@@ -368,22 +368,22 @@ class Generator(nn.Module):
                 length.
         """
         # Start tokens
-        x = torch.LongTensor([self.voc.tk2ix['GO']] * batch_size).to(util.dev)
+        x = torch.LongTensor([self.voc.tk2ix['GO']] * batch_size).to(util.getDev())
         # Hidden states initialization for exploitation network
         h = self.init_h(batch_size)
         # Hidden states initialization for exploration network
         h1 = self.init_h(batch_size)
         # Initialization of output matrix
-        sequences = torch.zeros(batch_size, self.voc.max_len).long().to(util.dev)
+        sequences = torch.zeros(batch_size, self.voc.max_len).long().to(util.getDev())
         # labels to judge and record which sample is ended
-        is_end = torch.zeros(batch_size).byte().to(util.dev)
+        is_end = torch.zeros(batch_size).byte().to(util.getDev())
 
         for step in range(self.voc.max_len):
             with torch.no_grad():
                 logit, h = self(x, h)
                 if explore:
                     logit1, h1 = explore(x, h1)
-                    loc = (torch.rand(batch_size, 1) < epsilon).expand(logit.size()).to(util.dev)
+                    loc = (torch.rand(batch_size, 1) < epsilon).expand(logit.size()).to(util.getDev())
                     logit[loc] = logit1[loc]
                 proba = logit.softmax(dim=-1)
                 # sampling based on output probability distribution
@@ -427,7 +427,7 @@ class Generator(nn.Module):
                 current_step += 1
                 current_batch = i
                 optimizer.zero_grad()
-                loss_train = self.likelihood(batch.to(util.dev))
+                loss_train = self.likelihood(batch.to(util.getDev()))
                 loss_train = -loss_train.mean()
                 loss_train.backward()
                 optimizer.step()
@@ -453,7 +453,7 @@ class Generator(nn.Module):
                         for j, inner_batch in enumerate(loader_valid):
                             size += inner_batch.size(0)
                             with torch.no_grad():
-                                loss_valid += -self.likelihood(inner_batch.to(util.dev)).sum()
+                                loss_valid += -self.likelihood(inner_batch.to(util.getDev())).sum()
 
                         loss_valid = loss_valid / size / self.voc.max_len
                         current_loss_valid = loss_valid.item()
@@ -500,7 +500,7 @@ class Discriminator(Base):
         self.sigmoid = nn.Sigmoid()
         self.init_parameters()
 
-        self.to(util.dev)
+        self.to(util.getDev())
         self.optim = torch.optim.Adam(filter(lambda p: p.requires_grad, self.parameters()))
 
     def forward(self, x):
