@@ -32,21 +32,27 @@ class Voc(object):
     Arguments:
         path (str): the path of vocabulary file that contains all of the tokens split by '\n'
     """
+
+    meta_chars = ['EOS', 'GO']
+
     def __init__(self, path=None, chars=tuple(), max_len=100):
+        self.max_len = max_len
+
         chars = list(chars)
-        self.meta_chars = ['EOS', 'GO']
         self.chars = self.meta_chars + [x for x in chars if x not in self.meta_chars]
-        if path is not None and os.path.exists(path):
+        if path is not None and os.path.exists(path): # TODO: exception if path does not exist
             f = open(path, 'r')
             file_chars = f.read().split()
             assert len(set(file_chars)) == len(file_chars) # TODO: replace with Exception or remove
             self.chars += [x for x in file_chars if x not in self.chars]
+        self.updateMapping()
+
+    def updateMapping(self):
         self.size = len(self.chars)
         # dict -> {token: index} for encoding
         self.tk2ix = dict(zip(self.chars, range(len(self.chars))))
         # dict -> {index: token} for decoding
         self.ix2tk = {v: k for k, v in self.tk2ix.items()}
-        self.max_len = max_len
 
     @staticmethod
     def tokenize(smile):
