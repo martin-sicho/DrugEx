@@ -48,7 +48,7 @@ class DataProvidingCorpus(Corpus):
     def saveVoc(self, out):
         # persisting the vocabulary on the hard drive.
         with open(out, 'w') as file:
-            file.write('\n'.join(self.voc.chars))
+            file.write('\n'.join([x for x in self.voc.chars if x not in Voc.meta_chars]))
 
     def saveCorpus(self, out):
         self.df.to_csv(out, sep=self.sep, index=None)
