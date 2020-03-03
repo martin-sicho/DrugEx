@@ -9,7 +9,6 @@ from abc import ABC, abstractmethod
 
 import numpy as np
 import pandas as pd
-from chembl_webresource_client.new_client import new_client
 from rdkit import Chem
 from torch.utils.data import DataLoader
 from tqdm import tqdm
@@ -185,6 +184,7 @@ class CorpusChEMBL(DataProvidingCorpus):
                     )
                  ):
         super().__init__(smiles_col=smiles_field)
+        from chembl_webresource_client.new_client import new_client
         self.gene_names = gene_names
         self.extracted_fields = extracted_fields
         self.CHEMBL_TARGETS = new_client.target
