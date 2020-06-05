@@ -34,7 +34,7 @@ The code and its dependencies can be installed from GitHub with the following
 commands:
 
 ```bash
-$ git clone https://https://github.com/XuhanLiu/DrugEx.git drugex
+$ git clone https://github.com/XuhanLiu/DrugEx.git drugex
 $ cd drugex
 $ pip install -e .
 ```
