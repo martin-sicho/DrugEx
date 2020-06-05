@@ -4,7 +4,7 @@ DrugEx RELEASE NOTES
 **ATTENTION**: This is a modified version of DrugEx that should be consistent with the method published by the original authors. However, it contains quite a few changes from the original so you are encouraged to review the development history before using this. Here are the integrated changes so far: 
    1. Changes made by [@cthoyt](https://github.com/XuhanLiu/DrugEx/pull/3) to make the code installable with pip and makes DrugEx scripts available through CLI. 
    2. Fixes mentioned in PR [#3](https://github.com/XuhanLiu/DrugEx/pull/7).
-   3. Wraps the DrugEx core functionality with an API for easier integration with other software packages. An automatic download of molecules from ChEMBL was also added.
+   3. Wraps the DrugEx core functionality with an API for easier integration with other software packages. An automatic download of molecules from ChEMBL was also added. There is a Jupyter notebook with an example [workflow](./workflow.ipynb) that uses this API.
 
 DrugEx (Drug Explorer): An explaration strategy improves the diversity of de novo drug design using deep reinforcement learning
 
