@@ -41,9 +41,9 @@ You should first install the [RDKit](http://www.rdkit.org/) library in your envi
 This python code and its dependencies can then be installed to the environment with the following commands:
 
 ```bash
-$ git clone https://github.com/XuhanLiu/DrugEx.git drugex
-$ cd drugex
-$ pip install -e .
+git clone https://github.com/martin-sicho/DrugEx.git drugex
+cd drugex
+pip install -e .
 ```
 
 If you are installing dependencies manually the following should be satisfied to run the code: 
