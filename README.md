@@ -1,5 +1,11 @@
 DrugEx RELEASE NOTES
 ====================
+
+**ATTENTION**: This is a modified version of DrugEx that should be consistent with the method published by the original authors. However, it contains quite a few changes from the original so you are encouraged to review the development history before using this. Here are the integrated changes so far: 
+   1. Changes made by [@cthoyt](https://github.com/XuhanLiu/DrugEx/pull/3) to make the code installable with pip and makes DrugEx scripts available through CLI. 
+   2. Fixes mentioned in PR [#3](https://github.com/XuhanLiu/DrugEx/pull/7).
+   3. Wraps the DrugEx core functionality with an API for easier integration with other software packages. An automatic download of molecules from ChEMBL was also added.
+
 DrugEx (Drug Explorer): An explaration strategy improves the diversity of de novo drug design using deep reinforcement learning
 
 By Xuhan Liu & Gerard J.P. van Westen, on November 1st 2018
@@ -30,8 +36,9 @@ Examples
 
 Installation
 ============
-The code and its dependencies can be installed from GitHub with the following
-commands:
+You should first install the [RDKit](http://www.rdkit.org/) library in your environment before installing other packages. The easiest way to install it is to pull it from [Anaconda Cloud](https://anaconda.org/rdkit/rdkit) and setup an environment dedicated to your project.
+
+This python code and its dependencies can then be installed to the environment with the following commands:
 
 ```bash
 $ git clone https://github.com/XuhanLiu/DrugEx.git drugex
@@ -39,29 +46,29 @@ $ cd drugex
 $ pip install -e .
 ```
 
-If you are installing dependecies manually the following should be satisfied:
+If you are installing dependencies manually the following should be satisfied to run the code: 
 
 1. Numpy: (version >= 1.14)
 
-    `tcsh% pip install numpy`
+    `pip install numpy`
 
 2. Scikit-Learn (version >= 0.18)
 
-    `tcsh% pip install scikit-learn`
+    `pip install scikit-learn`
 
 3. Pandas (version >= 0.22)
 
-    `tcsh% pip install pandas`
+    `pip install pandas`
 
 4. PyTorch (version == 1.0)
 
-    `tcsh% conda install pytorch torchvision cudatoolkit=x.x -c pytorch` 
+    `conda install pytorch torchvision cudatoolkit=x.x -c pytorch` 
     
     Note: it depends on the GPU device and CUDA tookit (x.x is the version of CUDA)
 
 5. Matplotlib (version >= 2.0)
 
-    `tcsh% pip install matplotlib`
+    `pip install matplotlib`
         
 On mac, you may [need](https://github.com/pytorch/pytorch/issues/20030) to also
 install `libomp` with:
