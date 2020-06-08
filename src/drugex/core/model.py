@@ -433,7 +433,8 @@ class Generator(nn.Module):
                 optimizer.step()
                 # Performance Evaluation
                 current_loss_valid = None
-                if (monitor_freq > 0 and i % monitor_freq == 0) or loader_valid is not None:
+                monitoring_on = monitor_freq > 0 and (current_step == 1 or current_step % monitor_freq == 0)
+                if i % 10 == 0 or loader_valid is not None:
                     # 1000 SMILES is sampled
                     seqs = self.sample(1000)
                     # ix = util.unique(seqs)
@@ -467,13 +468,14 @@ class Generator(nn.Module):
                         best_error = error
 
                     # feed monitoring info
-                    for monitor in self.monitors:
-                        monitor.model(self)
-                        monitor.state(self.state_dict(), is_best)
-                        monitor.performance(current_loss_train, current_loss_valid, current_error_rate, best_error)
-                        for j, smile in enumerate(smiles):
-                            monitor.smiles(smile, valids[j])
-                        monitor.finalizeStep(epoch+1, current_batch, current_step, total_epochs, total_batches, total_steps)
+                    if monitoring_on:
+                        for monitor in self.monitors:
+                            monitor.model(self)
+                            monitor.state(self.state_dict(), is_best)
+                            monitor.performance(current_loss_train, current_loss_valid, current_error_rate, best_error)
+                            for j, smile in enumerate(smiles):
+                                monitor.smiles(smile, valids[j])
+                            monitor.finalizeStep(epoch+1, current_batch, current_step, total_epochs, total_batches, total_steps)
 
         for monitor in self.monitors:
             monitor.close()
